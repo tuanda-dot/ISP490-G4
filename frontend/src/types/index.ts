@@ -11,6 +11,20 @@ export type Role =
   | 'SITE_ENGINEER'
   | 'OFFICE_STAFF';
 
+export const ROLE_LABELS: Record<Role, string> = {
+  SYSTEM_ADMIN: 'Quản Trị Hệ Thống',
+  ADMIN: 'Quản Trị Hệ Thống',
+  DIRECTOR: 'Ban Giám Đốc',
+  CEO: 'Ban Giám Đốc',
+  HR_MANAGER: 'Trưởng Phòng HR',
+  HR_STAFF: 'Chuyên Viên HR',
+  CHIEF_ACCOUNTANT: 'Kế Toán Trưởng',
+  ACCOUNTANT: 'Chuyên Viên Kế Toán',
+  SITE_MANAGER: 'Chỉ Huy Trưởng CT',
+  SITE_ENGINEER: 'Kỹ Sư Công Trường',
+  OFFICE_STAFF: 'NV Văn Phòng',
+};
+
 export type EmployeeType = 'OFFICE_STAFF' | 'SITE_ENGINEER';
 export type ContractType = 'OFFICIAL_DEFINITE' | 'OFFICIAL_INDEFINITE' | 'PROBATION' | 'EXPERT_CONSULTANT';
 export type ContractStatus = 'ACTIVE' | 'EXPIRED' | 'TERMINATED';
@@ -234,6 +248,8 @@ export interface ComplianceRuleItem {
   description: string;
   category: 'INSURANCE' | 'TAX' | 'LABOR_LAW' | 'OVERTIME';
   isActive: boolean;
+  status?: 'ACTIVE' | 'PENDING' | 'ARCHIVED';
+  version?: string;
 }
 
 export interface SalaryScaleGrade {
