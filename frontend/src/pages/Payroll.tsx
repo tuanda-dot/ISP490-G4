@@ -320,6 +320,319 @@ export const Payroll: React.FC = () => {
     showToast(`Đã gửi ticket phản hồi phiếu lương đến Bộ phận Kế toán thành công! Mã ticket: #TK-PAY-${Date.now().toString().slice(-4)}`);
   };
 
+  // If staff or site manager: Render dedicated Personal Encrypted E-Payslip Portal
+  if (isStaff) {
+    const isSiteMgr = currentRole === 'SITE_MANAGER';
+    return (
+      <div className="page-wrapper">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">
+              Tra Cứu Phiếu Lương Điện Tử Cá Nhân (Encrypted E-Payslip - UC-24)
+            </h1>
+            <p className="page-description">
+              Phiếu thanh toán tiền lương bảo mật gửi đến {isSiteMgr ? 'Chỉ huy trưởng' : 'nhân sự'} <strong>{user?.fullName || 'nhân sự'}</strong> theo chuẩn Điều 95 Bộ luật Lao động 2019/2026.
+            </p>
+          </div>
+
+          <div className="header-actions">
+            <button onClick={() => setShowFeedbackModal(true)} className="btn btn-secondary" style={{ backgroundColor: '#fffbeb', color: '#b45309', borderColor: '#fde68a' }}>
+              <FileText size={15} />
+              <span>Gửi Phản Hồi / Khiếu Nại (UC-24)</span>
+            </button>
+            <button onClick={() => handleSendEmailPayslip(user?.fullName || 'bạn')} className="btn btn-secondary">
+              <Mail size={15} />
+              <span>Gửi Mã Hóa Qua Email</span>
+            </button>
+            <button onClick={handlePrintPayslip} className="btn btn-primary">
+              <Printer size={15} />
+              <span>In Phiếu Lương</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Toast Alert */}
+        {toastMessage && (
+          <div className="alert-banner alert-banner-success" style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CheckCircle2 size={16} />
+              <span>{toastMessage}</span>
+            </div>
+          </div>
+        )}
+
+        <div style={{ maxWidth: '820px', margin: '0 auto' }}>
+          <div
+            style={{
+              backgroundColor: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0.85rem 1.25rem',
+              marginBottom: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              fontSize: '0.8125rem',
+              color: '#1e40af',
+            }}
+          >
+            <ShieldAlert size={20} color="#2563eb" style={{ flexShrink: 0 }} />
+            <div>
+              <strong>Chính Sách Bảo Mật Tiền Lương:</strong> Bạn đang đăng nhập với vai trò {isSiteMgr ? 'Chỉ Huy Trưởng Công Trường' : 'Kỹ sư / Nhân sự'} (
+              <strong>{user?.fullName}</strong> - <span className="font-mono">{user?.employeeCode}</span>). Theo Điều 95
+              Bộ luật Lao động 2019/2026, thông tin thu nhập của nhân sự được mã hóa và bảo mật riêng biệt. Bạn chỉ có quyền
+              truy cập Phiếu lương điện tử cá nhân (E-Payslip) của chính mình.
+            </div>
+          </div>
+
+          {/* Embedded Personal E-Payslip Card */}
+          <div className="card" style={{ padding: '1.75rem', border: '1px solid var(--border-subtle)' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                borderBottom: '2px solid var(--border-subtle)',
+                paddingBottom: '1rem',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  CÔNG TY CỔ PHẦN XÂY DỰNG HẢI MINH
+                </div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)', marginTop: '2px' }}>
+                  PHIẾU THANH TOÁN TIỀN LƯƠNG &amp; THU NHẬP CÁ NHÂN (E-PAYSLIP)
+                </h2>
+                <span className="text-xs text-slate-500 font-mono">
+                  Kỳ thanh toán: Tháng 10/2026 • Số chứng từ: PKT-2026-10-001 • Trạng thái: {payrollStatus}
+                </span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span className="badge badge-success" style={{ padding: '0.35rem 0.65rem' }}>
+                  Đã Xác Thực Kế Toán
+                </span>
+              </div>
+            </div>
+
+            {/* Profile Bar */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '0.75rem',
+                fontSize: '0.8125rem',
+                backgroundColor: '#f8fafc',
+                padding: '1rem',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-subtle)',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div>
+                <span className="text-xs text-slate-500">Họ và tên nhân sự:</span>
+                <div className="font-bold text-slate-900">{myPayslipRecord.fullName}</div>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500">Mã định danh cán bộ:</span>
+                <div className="font-mono font-bold text-slate-800">{myPayslipRecord.employeeCode}</div>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500">Chức vụ / Vị trí:</span>
+                <div className="font-medium text-slate-800">{myPayslipRecord.position}</div>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500">Hạch toán chi phí:</span>
+                <div className="font-semibold text-slate-900">
+                  {myPayslipRecord.employeeType === 'OFFICE_STAFF' ? 'TK 642 (Quản lý Doanh nghiệp)' : 'TK 627 (Chi phí Công trường)'}
+                </div>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500">Ngày công thực tế:</span>
+                <div className="font-mono font-medium text-slate-800">
+                  {myPayslipRecord.actualDays} / {myPayslipRecord.stdDays} ngày chuẩn
+                </div>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500">Người phụ thuộc (NPT):</span>
+                <div className="font-medium text-slate-800">{myPayslipRecord.dependentsCount} người</div>
+              </div>
+            </div>
+
+            {/* Earnings Breakdown */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.8125rem' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-main)', textTransform: 'uppercase', marginBottom: '0.4rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.2rem' }}>
+                  I. CÁC KHOẢN THU NHẬP (GROSS EARNINGS)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span className="text-slate-600">1. Lương cơ bản theo ngày công thực tế ({myPayslipRecord.actualDays} công):</span>
+                    <span className="tabular-nums font-medium text-slate-900">{formatVND(myPayslipRecord.proratedBase)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span className="text-slate-600">2. Phụ cấp tiền ăn ca ({myPayslipRecord.actualDays} x 40.000 ₫):</span>
+                    <span className="tabular-nums font-medium text-slate-900">{formatVND(myPayslipRecord.mealAllowance)}</span>
+                  </div>
+                  {myPayslipRecord.siteAllowance > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="text-slate-600">3. Phụ cấp lưu trú &amp; trách nhiệm công trường (Miễn BHXH):</span>
+                      <span className="tabular-nums font-medium text-slate-900">{formatVND(myPayslipRecord.siteAllowance)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span className="text-slate-600">4. Phụ cấp xăng xe &amp; điện thoại:</span>
+                    <span className="tabular-nums font-medium text-slate-900">{formatVND(myPayslipRecord.mobileAllowance)}</span>
+                  </div>
+                  {myPayslipRecord.overtimePay > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="text-blue-700 font-medium">5. Tiền làm thêm giờ OT ({myPayslipRecord.otHours}h x {myPayslipRecord.otMultiplier}x):</span>
+                      <span className="tabular-nums font-bold text-blue-700">+{formatVND(myPayslipRecord.overtimePay)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '0.35rem', marginTop: '0.2rem' }}>
+                    <strong className="text-slate-900">TỔNG THU NHẬP GROSS:</strong>
+                    <strong className="tabular-nums text-slate-900 font-bold">{formatVND(myPayslipRecord.gross)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-main)', textTransform: 'uppercase', marginBottom: '0.4rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.2rem' }}>
+                  II. CÁC KHOẢN TRÍCH NỘP &amp; KHẤU TRỪ (DEDUCTIONS)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span className="text-slate-600">1. Bảo hiểm NLĐ đóng (BHXH 8%, BHYT 1.5%, BHTN 1% = 10.5%):</span>
+                    <span className="tabular-nums font-medium text-rose-700">-{formatVND(myPayslipRecord.bhNld)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span className="text-slate-600">2. Thuế thu nhập cá nhân (Biểu lũy tiến từng phần):</span>
+                    <span className="tabular-nums font-medium text-amber-700">-{formatVND(myPayslipRecord.pitTax)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span className="text-slate-600">3. Kinh phí đoàn viên công đoàn (1% lương BHXH):</span>
+                    <span className="tabular-nums font-medium text-slate-700">-{formatVND(myPayslipRecord.unionDues)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Net Card */}
+              <div
+                style={{
+                  backgroundColor: '#ecfdf5',
+                  border: '1.5px solid #a7f3d0',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '1rem 1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#065f46', textTransform: 'uppercase' }}>
+                    III. THỰC LĨNH CHUYỂN KHOẢN (NET TAKE-HOME PAY)
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#047857' }}>
+                    Hình thức: Chuyển khoản ngân hàng Vietcombank • Số TK: 00110045689xx
+                  </div>
+                </div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#047857' }} className="tabular-nums">
+                  {formatVND(myPayslipRecord.net)}
+                </div>
+              </div>
+
+              {/* Digital Verification & QR */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.75rem',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-subtle)',
+                  fontSize: '0.75rem',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <QrCode size={34} color="var(--color-primary)" />
+                  <div>
+                    <div>Chữ ký số: <strong className="text-slate-800 font-mono">HM-SIGN-SHA256-PKT202610</strong></div>
+                    <div>Xác thực số bởi Kế toán trưởng &amp; Tổng giám đốc công ty Hải Minh</div>
+                  </div>
+                </div>
+                <div className="font-mono text-slate-500">
+                  Mã tra cứu: PKT-2026-10-{myPayslipRecord.id.toString().padStart(4, '0')}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Feedback / Complaint Modal (UC-24) */}
+        {showFeedbackModal && (
+          <div className="modal-backdrop">
+            <div className="modal-content" style={{ maxWidth: '520px' }}>
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Phản Hồi &amp; Khiếu Nại Phiếu Lương (UC-24)</h3>
+                  <p className="modal-subtitle">Gửi thắc mắc về tiền lương, phụ cấp công trường hoặc giờ tăng ca OT về Bộ phận Kế toán</p>
+                </div>
+                <button onClick={() => setShowFeedbackModal(false)} className="btn-icon">
+                  &times;
+                </button>
+              </div>
+
+              <form onSubmit={handleSendFeedbackTicket}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem 0' }}>
+                  <div className="form-group">
+                    <label className="form-label">Kỳ Lương Khiếu Nại</label>
+                    <input type="text" className="form-input" value="Tháng 10/2026 (PKT-2026-10-001)" disabled />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Chủ Đề Phản Hồi</label>
+                    <select
+                      className="form-select"
+                      value={feedbackSubject}
+                      onChange={(e) => setFeedbackSubject(e.target.value)}
+                    >
+                      <option value="Thắc mắc số giờ tăng ca OT đêm">Thắc mắc số giờ tăng ca OT đêm (Hệ số 1.8x/2.0x)</option>
+                      <option value="Sai lệch phụ cấp lưu trú công trường">Sai lệch phụ cấp lưu trú công trường (TK 627)</option>
+                      <option value="Khấu trừ thuế TNCN hoặc BHXH">Thắc mắc mức khấu trừ Thuế TNCN hoặc BHXH</option>
+                      <option value="Thiếu ngày công thực tế">Thiếu ngày công so với nhật ký điểm danh</option>
+                      <option value="Khác">Vấn đề thắc mắc khác</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Nội Dung Chi Tiết (*)</label>
+                    <textarea
+                      className="form-textarea"
+                      rows={4}
+                      placeholder="Mô tả cụ thể số giờ công, ngày làm việc, hoặc lý do chênh lệch cần Kế toán đối soát lại..."
+                      value={feedbackContent}
+                      onChange={(e) => setFeedbackContent(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button type="button" onClick={() => setShowFeedbackModal(false)} className="btn btn-secondary">
+                    Hủy Bỏ
+                  </button>
+                  <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#b45309' }}>
+                    <FileText size={15} />
+                    <span>Gửi Ticket Khiếu Nại</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 
