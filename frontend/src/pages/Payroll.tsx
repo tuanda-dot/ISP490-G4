@@ -6,7 +6,9 @@ import {
   TrendingUp,
   Building,
   FileText,
-  Play
+  Play,
+  ArrowUpRight,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api, mockEmployees } from '../services/api';
@@ -145,6 +147,16 @@ export const Payroll: React.FC = () => {
     }
   };
 
+  const handleSubmitToChief = () => {
+    setPayrollStatus('CALCULATED');
+    showToast('Đã chuyển bảng lương sang Kế toán trưởng thẩm định!');
+  };
+
+  const handleChiefReview = () => {
+    setPayrollStatus('REVIEWED');
+    showToast('Kế toán trưởng đã ký số soát xét và chuyển Tờ trình sang Giám đốc phê duyệt!');
+  };
+
   const mockPayrollData = [
     { id: 1, employeeCode: 'HM-001', fullName: 'Trần Văn Mạnh', position: 'Giám Đốc Dự Án', department: 'Ban QLDA', employeeType: 'OFFICE_STAFF', stdDays: 26, actualDays: 26, baseSalary: 35000000, proratedBase: 35000000, mealAllowance: 730000, siteAllowance: 0, mobileAllowance: 1000000, overtimeHours: 0, overtimePay: 0, gross: 36730000, bhxhNld: 2800000, bhytNld: 525000, bhtnNld: 350000, bhNld: 3675000, bhDn: 8225000, personalDeduction: 11000000, dependentDeduction: 8800000, taxableIncome: 12525000, pitTax: 1005000, unionDues: 350000, net: 31700000, email: 'manh.tv@haiminh.vn' },
     { id: 2, employeeCode: 'HM-002', fullName: 'Lê Hoàng Nam', position: 'Chỉ Huy Trưởng', department: 'DA Cầu Nhật Tân 2', employeeType: 'SITE_ENGINEER', stdDays: 26, actualDays: 25, baseSalary: 26000000, proratedBase: 25000000, mealAllowance: 730000, siteAllowance: 3000000, mobileAllowance: 500000, overtimeHours: 12, overtimePay: 2250000, gross: 31480000, bhxhNld: 2080000, bhytNld: 390000, bhtnNld: 260000, bhNld: 2730000, bhDn: 6110000, personalDeduction: 11000000, dependentDeduction: 4400000, taxableIncome: 12600000, pitTax: 1015000, unionDues: 260000, net: 27475000, email: 'nam.lh@haiminh.vn' },
@@ -192,10 +204,61 @@ export const Payroll: React.FC = () => {
             <Download size={14} />
             <span>Xuất Phân Bổ (.csv)</span>
           </button>
+          {payrollStatus === 'CALCULATED' && (
+            <button onClick={handleSubmitToChief} className="btn btn-secondary btn-sm" style={{ color: '#2563eb', borderColor: '#bfdbfe' }}>
+              <ArrowUpRight size={14} />
+              <span>Trình KT Trưởng</span>
+            </button>
+          )}
+          {(payrollStatus === 'CALCULATED' || payrollStatus === 'DRAFT') && (
+            <button onClick={handleChiefReview} className="btn btn-primary btn-sm" style={{ backgroundColor: '#d97706' }}>
+              <Check size={14} />
+              <span>Thẩm Định (KT Trưởng)</span>
+            </button>
+          )}
           <button onClick={handleRunPayroll} className="btn btn-primary btn-sm" style={{ backgroundColor: '#2563eb' }}>
             <Play size={14} />
             <span>Chạy Tính Lương (Gross &rarr; Net)</span>
           </button>
+        </div>
+      </div>
+
+      {/* Maker-Checker Workflow Stepper Strip (UC-23) */}
+      <div
+        className="card"
+        style={{
+          marginBottom: '1.25rem',
+          padding: '0.85rem 1.25rem',
+          backgroundColor: '#f8fafc',
+          border: '1px solid var(--border-subtle)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-main)' }}>
+            Tiến Trình Phê Duyệt (Maker - Checker):
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem' }}>
+            <span className={'badge ' + (payrollStatus !== 'DRAFT' ? 'badge-success' : 'badge-primary')}>
+              1. Kế toán lập ({payrollStatus !== 'DRAFT' ? 'Đã lập' : 'Đang lập'})
+            </span>
+            <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
+            <span className={'badge ' + (payrollStatus === 'REVIEWED' || payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'badge-success' : (payrollStatus === 'CALCULATED' ? 'badge-warning' : 'badge-slate'))}>
+              2. KT Trưởng thẩm định ({payrollStatus === 'REVIEWED' || payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'Đã duyệt' : (payrollStatus === 'CALCULATED' ? 'Chờ duyệt' : 'Chưa đến')})
+            </span>
+            <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
+            <span className={'badge ' + (payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'badge-success' : (payrollStatus === 'REVIEWED' ? 'badge-warning' : 'badge-slate'))}>
+              3. Giám Đốc phê duyệt ({payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'Đã duyệt' : (payrollStatus === 'REVIEWED' ? 'Chờ duyệt' : 'Chưa đến')})
+            </span>
+            <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
+            <span className={'badge ' + (payrollStatus === 'PAID' ? 'badge-success' : 'badge-slate')}>
+              4. Khóa sổ chi trả ({payrollStatus === 'PAID' ? 'Đã chi' : 'Chưa chi'})
+            </span>
+          </div>
         </div>
       </div>
 
