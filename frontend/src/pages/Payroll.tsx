@@ -1421,6 +1421,214 @@ export const Payroll: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Modal: Individual E-Payslip (UC-24) */}
+      {selectedPayslipEmp && (
+        <div className="modal-backdrop" onClick={() => setSelectedPayslipEmp(null)}>
+          <div className="modal-content" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header" style={{ borderBottom: '2px solid var(--border-subtle)', paddingBottom: '1rem' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  CÔNG TY CỔ PHẦN XÂY DỰNG HẢI MINH
+                </div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)', marginTop: '2px' }}>
+                  PHIẾU THANH TOÁN TIỀN LƯƠNG &amp; THU NHẬP (E-PAYSLIP)
+                </h3>
+                <span className="text-xs text-slate-500 font-mono">Kỳ thanh toán: Tháng 10/2026 • Số chứng từ: PKT-2026-10-001</span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span className="badge badge-success">Đã Xác Thực Kế Toán</span>
+              </div>
+            </div>
+
+            <div className="modal-body" style={{ padding: '1.25rem' }}>
+              {/* Employee Summary Card */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '0.65rem',
+                  fontSize: '0.8125rem',
+                  backgroundColor: '#f8fafc',
+                  padding: '0.85rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-subtle)',
+                  marginBottom: '1rem',
+                }}
+              >
+                <div>
+                  <span className="text-xs text-slate-500">Họ và tên nhân sự:</span>
+                  <div className="font-bold text-slate-900">{selectedPayslipEmp.fullName}</div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500">Mã định danh cán bộ:</span>
+                  <div className="font-mono font-bold text-slate-800">{selectedPayslipEmp.employeeCode}</div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500">Chức vụ / Vị trí:</span>
+                  <div className="font-medium text-slate-800">{selectedPayslipEmp.position}</div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500">Tài khoản hạch toán chi phí:</span>
+                  <div className="font-semibold text-slate-900">
+                    {selectedPayslipEmp.employeeType === 'OFFICE_STAFF' ? 'TK 642 (Quản lý DN)' : 'TK 627 (Chi phí CT)'}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500">Ngày công thực tế:</span>
+                  <div className="font-mono font-medium text-slate-800">
+                    {selectedPayslipEmp.actualDays} / {selectedPayslipEmp.stdDays} ngày chuẩn
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500">Người phụ thuộc (NPT):</span>
+                  <div className="font-medium text-slate-800">{selectedPayslipEmp.dependentsCount} người</div>
+                </div>
+              </div>
+
+              {/* Breakdown Table */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontSize: '0.8125rem' }}>
+                {/* 1. Earnings */}
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-main)', textTransform: 'uppercase', marginBottom: '0.35rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.2rem' }}>
+                    I. CÁC KHOẢN THU NHẬP (GROSS EARNINGS)
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="text-slate-600">1. Lương cơ bản theo ngày công thực tế ({selectedPayslipEmp.actualDays} ngày):</span>
+                      <span className="tabular-nums font-medium text-slate-900">{formatVND(selectedPayslipEmp.proratedBase)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="text-slate-600">2. Phụ cấp tiền ăn ca ({selectedPayslipEmp.actualDays} x 40.000 ₫):</span>
+                      <span className="tabular-nums font-medium text-slate-900">{formatVND(selectedPayslipEmp.mealAllowance)}</span>
+                    </div>
+                    {selectedPayslipEmp.siteAllowance > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-slate-600">3. Phụ cấp lưu trú &amp; trách nhiệm công trường (Miễn BHXH):</span>
+                        <span className="tabular-nums font-medium text-slate-900">{formatVND(selectedPayslipEmp.siteAllowance)}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="text-slate-600">4. Phụ cấp xăng xe &amp; điện thoại liên lạc:</span>
+                      <span className="tabular-nums font-medium text-slate-900">{formatVND(selectedPayslipEmp.mobileAllowance)}</span>
+                    </div>
+                    {selectedPayslipEmp.overtimePay > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-blue-700 font-medium">5. Tiền làm thêm giờ OT ({selectedPayslipEmp.otHours}h x {selectedPayslipEmp.otMultiplier}x):</span>
+                        <span className="tabular-nums font-bold text-blue-700">+{formatVND(selectedPayslipEmp.overtimePay)}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '0.3rem', marginTop: '0.2rem' }}>
+                      <strong className="text-slate-900">TỔNG THU NHẬP GROSS:</strong>
+                      <strong className="tabular-nums text-slate-900">{formatVND(selectedPayslipEmp.gross)}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Deductions */}
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-main)', textTransform: 'uppercase', marginBottom: '0.35rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.2rem' }}>
+                    II. CÁC KHOẢN TRÍCH NỘP &amp; KHẤU TRỪ (DEDUCTIONS)
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="text-slate-600">1. Bảo hiểm NLĐ đóng (BHXH 8%, BHYT 1.5%, BHTN 1% = 10.5%):</span>
+                      <span className="tabular-nums font-medium text-rose-700">-{formatVND(selectedPayslipEmp.bhNld)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="text-slate-600">2. Thuế thu nhập cá nhân (Biểu lũy tiến từng phần):</span>
+                      <span className="tabular-nums font-medium text-amber-700">-{formatVND(selectedPayslipEmp.pitTax)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="text-slate-600">3. Kinh phí đoàn viên công đoàn (1% lương BHXH):</span>
+                      <span className="tabular-nums font-medium text-slate-700">-{formatVND(selectedPayslipEmp.unionDues)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Net Take-Home Card */}
+                <div
+                  style={{
+                    backgroundColor: '#ecfdf5',
+                    border: '1.5px solid #a7f3d0',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '0.85rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#065f46', textTransform: 'uppercase' }}>
+                      III. THỰC LĨNH CHUYỂN KHOẢN (NET TAKE-HOME PAY)
+                    </div>
+                    <div style={{ fontSize: '0.6875rem', color: '#047857' }}>
+                      Hình thức: Chuyển khoản ngân hàng Vietcombank
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#047857' }} className="tabular-nums">
+                    {formatVND(selectedPayslipEmp.net)}
+                  </div>
+                </div>
+
+                {/* Digital Verification & QR */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.65rem',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                    fontSize: '0.6875rem',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <QrCode size={28} color="var(--color-primary)" />
+                    <div>
+                      <div>Chữ ký số: <strong className="text-slate-800 font-mono">HM-SIGN-SHA256-PKT202610</strong></div>
+                      <div>Xác thực kế toán trưởng &amp; Tổng giám đốc công ty Hải Minh</div>
+                    </div>
+                  </div>
+                  <div className="font-mono text-slate-500">
+                    Mã tra cứu: PKT-2026-10-{selectedPayslipEmp.id.toString().padStart(4, '0')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <button
+                type="button"
+                onClick={() => handleSendEmailPayslip(selectedPayslipEmp.fullName)}
+                className="btn btn-secondary"
+              >
+                <Mail size={14} />
+                <span>Gửi Email SMTP</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintPayslip}
+                className="btn btn-secondary"
+              >
+                <Printer size={14} />
+                <span>In Phiếu Lương</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedPayslipEmp(null)}
+                className="btn btn-primary"
+              >
+                <span>Đóng</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
