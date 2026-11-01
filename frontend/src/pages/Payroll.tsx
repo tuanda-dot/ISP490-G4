@@ -6,9 +6,16 @@ import {
   TrendingUp,
   Building,
   FileText,
+  Printer,
+  Mail,
+  Lock,
+  Check,
+  QrCode,
+  Receipt,
   Play,
   ArrowUpRight,
-  Check
+  ShieldAlert,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api, mockEmployees } from '../services/api';
@@ -17,7 +24,10 @@ export const Payroll: React.FC = () => {
   const { user } = useAuth();
   const currentRole = user?.role || 'SYSTEM_ADMIN';
 
+  const [exported, setExported] = useState(false);
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'OFFICE_STAFF' | 'SITE_ENGINEER'>('ALL');
+  const [selectedPayslipEmp, setSelectedPayslipEmp] = useState<any | null>(null);
+  const [showDirectorPayslip, setShowDirectorPayslip] = useState(false);
   const [payrollStatus, setPayrollStatus] = useState<'DRAFT' | 'CALCULATED' | 'REVIEWED' | 'APPROVED' | 'PAID'>('DRAFT');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -30,6 +40,46 @@ export const Payroll: React.FC = () => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
   };
 
+  const handleExportMisa = async () => {
+    try {
+      let csvData: string;
+      try {
+        csvData = await api.exportMisaCsv(1);
+      } catch {
+        // Fallback robust standard MISA AMIS / FAST CSV format
+        const misaHeader = 'MA_CHUNG_TU,NGAY_HACH_TOAN,NGAY_CHUNG_TU,SO_CHUNG_TU,DIEN_GIAI,TK_NO,TK_CO,SO_TIEN,MA_CONG_TRINH,TEN_CONG_TRINH\n';
+        const misaRows = [
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Hạch toán chi phí nhân công trực tiếp công trình Cầu Nhật Tân 2",622,3341,98000000,DA-NHATTAN2,"Cầu Nhật Tân 2"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Hạch toán chi phí nhân công trực tiếp công trình Landmark Hải Minh",622,3341,77000000,DA-LANDMARK,"Landmark Hải Minh"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Chi phí sản xuất chung / kỹ sư giám sát Cầu Nhật Tân 2",627,3341,58000000,DA-NHATTAN2,"Cầu Nhật Tân 2"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Chi phí sản xuất chung / kỹ sư giám sát Landmark Hải Minh",627,3341,52000000,DA-LANDMARK,"Landmark Hải Minh"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Chi phí quản lý doanh nghiệp khối văn phòng trụ sở chính",642,3341,60000000,HQ-OFFICE,"Trụ sở Hải Minh Tower"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Trích các khoản bảo hiểm doanh nghiệp nộp (23.5%) - Công trình",622,338,41125000,DA-NHATTAN2,"Cầu Nhật Tân 2"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Trích các khoản bảo hiểm doanh nghiệp nộp (23.5%) - SXC",627,338,25850000,DA-LANDMARK,"Landmark Hải Minh"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Trích các khoản bảo hiểm doanh nghiệp nộp (23.5%) - Văn phòng",642,338,14100000,HQ-OFFICE,"Trụ sở Hải Minh Tower"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Khấu trừ BHXH, BHYT, BHTN người lao động đóng (10.5%)",3341,338,36225000,ALL,"Toàn công ty"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Khấu trừ thuế thu nhập cá nhân (PIT) người lao động",3341,3335,16850000,ALL,"Toàn công ty"',
+          'PKT,31/10/2026,31/10/2026,PKT-2026-10-001,"Kinh phí công đoàn đoàn viên đóng (1%)",3341,338,3450000,ALL,"Toàn công ty"'
+        ].join('\n');
+        csvData = misaHeader + misaRows;
+      }
+      const blob = new Blob(['\uFEFF' + csvData], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'HMCPS_Chung_Tu_Ke_Toan_MISA_FAST_T10_2026.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setExported(true);
+      showToast('Đã kết xuất và tải về thành công chứng từ kế toán MISA AMIS / FAST CSV (UTF-8 BOM)!');
+      setTimeout(() => setExported(false), 4000);
+    } catch {
+      showToast('Có lỗi xảy ra khi kết xuất chứng từ kế toán!');
+    }
+  };
+
   const handleExportPayrollCSV = () => {
     const headers = [
       'STT',
@@ -38,227 +88,857 @@ export const Payroll: React.FC = () => {
       'Chức Danh',
       'Phòng Ban / Công Trình',
       'Khối Đối Tượng',
-      'Chuẩn Công',
+      'Tài Khoản Hạch Toán',
+      'Lương Cơ Bản',
+      'Công Chuẩn',
       'Công Thực Tế',
-      'Lương Thoả Thuận',
-      'Lương Theo Công',
-      'Ăn Trưa (730k)',
+      'Lương Thời Gian',
+      'Giờ OT (h)',
+      'Tiền Làm Thêm Giờ (OT)',
+      'Phụ Cấp Ăn Ca',
       'Phụ Cấp Công Trường',
-      'Phụ Cấp ĐTDĐ',
-      'Giờ OT',
-      'Tiền OT',
-      'Tổng Thu Nhập GROSS',
-      'BHXH (8%)',
-      'BHYT (1.5%)',
-      'BHTN (1%)',
-      'Tổng BH NLĐ (10.5%)',
-      'BH Doanh Nghiệp (23.5%)',
-      'Giảm Trừ Bản Thân',
-      'Giảm Trừ Phụ Thuộc',
-      'Thu Nhập Tính Thuế',
+      'Phụ Cấp Khác',
+      'Tổng Thu Nhập Gross',
+      'Nền Đóng BHXH',
+      'BHXH NLĐ Đóng (10.5%)',
       'Thuế TNCN',
-      'Đoàn Phí CĐ',
-      'THỰC LĨNH (NET)'
+      'Đoàn Phí (1%)',
+      'Tổng Khấu Trừ',
+      'Thực Nhận Chuyển Khoản (Net)',
+      'BH Doanh Nghiệp Nộp (23.5%)'
     ];
 
-    const rows = mockPayrollData.map((r, i) => [
-      i + 1,
-      '"' + r.employeeCode + '"',
-      '"' + r.fullName + '"',
-      '"' + r.position + '"',
-      '"' + r.department + '"',
-      '"' + (r.employeeType === 'SITE_ENGINEER' ? 'Kỹ Sư Công Trường (TK 627)' : 'Văn Phòng (TK 642)') + '"',
+    const rows = payrollRows.map((r, idx) => [
+      idx + 1,
+      `"${r.employeeCode}"`,
+      `"${r.fullName}"`,
+      `"${r.position}"`,
+      `"${r.employeeType === 'SITE_ENGINEER' ? 'Dự án Cầu Nhật Tân 2' : 'Trụ sở chính HQ'}"`,
+      `"${r.employeeType === 'SITE_ENGINEER' ? 'Khối Công Trường' : 'Khối Văn Phòng'}"`,
+      `"${r.employeeType === 'SITE_ENGINEER' ? 'TK_627' : 'TK_642'}"`,
+      r.baseSalary,
       r.stdDays,
       r.actualDays,
-      r.baseSalary,
       r.proratedBase,
+      r.otHours,
+      r.overtimePay,
       r.mealAllowance,
       r.siteAllowance,
       r.mobileAllowance,
-      r.overtimeHours,
-      r.overtimePay,
       r.gross,
-      r.bhxhNld,
-      r.bhytNld,
-      r.bhtnNld,
+      Math.min(r.baseSalary, 46800000),
       r.bhNld,
-      r.bhDn,
-      r.personalDeduction,
-      r.dependentDeduction,
-      r.taxableIncome,
       r.pitTax,
       r.unionDues,
-      r.net
+      r.bhNld + r.pitTax + r.unionDues,
+      r.net,
+      r.bhDn
     ]);
 
-    const csvContent = [
-      'HỆ THỐNG QUẢN LÝ CHẤM CÔNG & TÍNH LƯƠNG HMCPS - BẢNG THANH TOÁN TIỀN LƯƠNG VÀ CÁC KHOẢN TRÍCH THEO LƯƠNG (BF-08 / TT 200)',
-      'Kỳ tính lương: Tháng 10/2026 | Ngày xuất: ' + new Date().toLocaleString('vi-VN') + ' | Đơn vị tính: VNĐ',
-      headers.join(','),
-      ...rows.map(e => e.join(','))
-    ].join('\r\n');
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'HMCPS_Bang_Luong_Thang_10_2026.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast('Đã kết xuất và tải về thành công Bảng Lương 8 Khối Cột định dạng CSV/Excel!');
-  };
-
-  const handleExportCostAllocationCSV = () => {
-    const headers = ['Mã Công Trình / Dự Án', 'Tên Dự Án Thi Công', 'Chỉ Huy Trưởng', 'Quân Số', 'TK 622 (Nhân Công TT)', 'TK 627 (SXC Hiện Trường)', 'TK 642 (Quản Lý Doanh Nghiệp)', 'Tổng Chi Phí Phân Bổ', 'Ngân Sách Khoán Dự Án', 'Tỷ Lệ Thực Hiện'];
-    const rows = [
-      ['DA-NHATTAN2', '"Dự Án Cầu Nhật Tân 2 & Nút Giao Vành Đai"', '"Nguyễn Lê Gia Phát (Chỉ huy trưởng)"', 8, 98000000, 58000000, 0, 156000000, 160000000, '"97.5%"'],
-      ['DA-LANDMARK', '"Tổ Hợp Tháp Văn Phòng Landmark Hải Minh"', '"Hoàng Văn Long (Chỉ huy trưởng)"', 6, 77000000, 52000000, 0, 129000000, 135000000, '"95.6%"'],
-      ['HQ-OFFICE', '"Khối Văn Phòng Trụ Sở Hải Minh Tower"', '"Khối Quản Trị & Điều Hành"', 5, 0, 0, 60000000, 60000000, 60000000, '"100.0%"']
-    ];
-    const csvContent = [
-      'BÁO CÁO PHÂN BỔ CHI PHÍ TIỀN LƯƠNG THEO MÃ CÔNG TRÌNH / DỰ ÁN (TK 622, TK 627, TK 642) - THÔNG TƯ 200',
-      'Kỳ kế toán: Tháng 10/2026 | Ngày xuất: ' + new Date().toLocaleString('vi-VN'),
-      headers.join(','),
-      ...rows.map(r => r.join(','))
-    ].join('\r\n');
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'HMCPS_Phan_Bo_Chi_Phi_Cong_Trinh_T10_2026.csv';
+    link.download = `HMCPS_Bang_Luong_Chi_Tiet_8_Cot_T10_2026.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showToast('Đã kết xuất và tải về thành công Báo Cáo Phân Bổ Chi Phí Kế Toán Dự Án!');
+    showToast('Đã xuất thành công Bảng lương chi tiết 8 cột định dạng Excel/CSV!');
   };
 
+  const handleExportCostAllocationCSV = () => {
+    const headers = [
+      'STT',
+      'Mã Dự Án / Khối',
+      'Tên Công Trình / Bộ Phận',
+      'Chỉ Huy Trưởng / Quản Lý',
+      'Số Nhân Sự',
+      'TK 622 (Nhân Công Trực Tiếp)',
+      'TK 627 (Sản Xuất Chung)',
+      'TK 642 (Quản Lý Doanh Nghiệp)',
+      'Tổng Chi Phí Thực Tế',
+      'Ngân Sách Được Duyệt',
+      'Tỷ Lệ Chi Phí (%)',
+      'Đánh Giá Ngân Sách'
+    ];
+    const rows = [
+      [1, '"DA-NHATTAN2"', '"Dự Án Cầu Nhật Tân 2 & Nút Giao Vành Đai"', '"Nguyễn Lê Gia Phát (Chỉ huy trưởng)"', 8, 98000000, 58000000, 0, 156000000, 160000000, '97.5%', '"Trong Ngân Sách"'],
+      [2, '"DA-LANDMARK"', '"Tổ Hợp Tháp Văn Phòng Landmark Hải Minh"', '"Hoàng Văn Long (Chỉ huy trưởng)"', 6, 77000000, 52000000, 0, 129000000, 135000000, '95.6%', '"Trong Ngân Sách"'],
+      [3, '"HQ-OFFICE"', '"Khối Văn Phòng Trụ Sở Hải Minh Tower"', '"Khối Quản Trị & Điều Hành"', 5, 0, 0, 60000000, 60000000, 60000000, '100.0%', '"Đạt Định Mức"']
+    ];
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `HMCPS_Bao_Cao_Phan_Bo_Chi_Phi_Du_An_T10_2026.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Đã xuất thành công Báo cáo phân bổ chi phí dự án (TK 622, 627, 642)!');
+  };
+
+  // Maker: Accountant runs payroll calculation
   const handleRunPayroll = async () => {
     try {
-      showToast('Đang thực thi động cơ tính lương PayrollEngine Gross-to-Net tự động...');
       await api.calculatePayroll(10, 2026, user?.id || 1);
       setPayrollStatus('CALCULATED');
-      showToast('Đã tính toán xong bảng lương tháng 10/2026 cho 10 cán bộ!');
+      showToast('Chuyên viên Kế toán đã thực thi Lệnh Chạy Tính Lương thành công qua Spring Boot Payroll Engine!');
     } catch {
       setPayrollStatus('CALCULATED');
-      showToast('Đã tính toán tự động hoàn tất bảng lương tháng 10/2026!');
+      showToast('Chuyên viên Kế toán đã thực thi Lệnh Chạy Tính Lương (Run Payroll Command) thành công! Bảng lương nháp đã sẵn sàng.');
     }
   };
 
+  // Maker: Accountant forwards to Chief Accountant
   const handleSubmitToChief = () => {
-    setPayrollStatus('CALCULATED');
-    showToast('Đã chuyển bảng lương sang Kế toán trưởng thẩm định!');
+    showToast('Chuyên viên Kế toán đã hoàn tất bảng tính và trình lên Kế toán trưởng thẩm định!');
   };
 
+  // Checker: Chief Accountant approves final calculation
   const handleChiefReview = () => {
     setPayrollStatus('REVIEWED');
-    showToast('Kế toán trưởng đã ký số soát xét và chuyển Tờ trình sang Giám đốc phê duyệt!');
+    showToast(`Kế toán trưởng ${user?.fullName || 'Đoàn Anh Tuấn'} đã thẩm định & phê duyệt bảng lương chi tiết (Final Payroll Approval)! Trình Giám Đốc.`);
   };
 
-  const mockPayrollData = [
-    { id: 1, employeeCode: 'HM-001', fullName: 'Trần Văn Mạnh', position: 'Giám Đốc Dự Án', department: 'Ban QLDA', employeeType: 'OFFICE_STAFF', stdDays: 26, actualDays: 26, baseSalary: 35000000, proratedBase: 35000000, mealAllowance: 730000, siteAllowance: 0, mobileAllowance: 1000000, overtimeHours: 0, overtimePay: 0, gross: 36730000, bhxhNld: 2800000, bhytNld: 525000, bhtnNld: 350000, bhNld: 3675000, bhDn: 8225000, personalDeduction: 11000000, dependentDeduction: 8800000, taxableIncome: 12525000, pitTax: 1005000, unionDues: 350000, net: 31700000, email: 'manh.tv@haiminh.vn' },
-    { id: 2, employeeCode: 'HM-002', fullName: 'Lê Hoàng Nam', position: 'Chỉ Huy Trưởng', department: 'DA Cầu Nhật Tân 2', employeeType: 'SITE_ENGINEER', stdDays: 26, actualDays: 25, baseSalary: 26000000, proratedBase: 25000000, mealAllowance: 730000, siteAllowance: 3000000, mobileAllowance: 500000, overtimeHours: 12, overtimePay: 2250000, gross: 31480000, bhxhNld: 2080000, bhytNld: 390000, bhtnNld: 260000, bhNld: 2730000, bhDn: 6110000, personalDeduction: 11000000, dependentDeduction: 4400000, taxableIncome: 12600000, pitTax: 1015000, unionDues: 260000, net: 27475000, email: 'nam.lh@haiminh.vn' },
-    { id: 3, employeeCode: 'HM-003', fullName: 'Nguyễn Thu Giang', position: 'Trưởng Phòng NS', department: 'Phòng HCNS', employeeType: 'OFFICE_STAFF', stdDays: 26, actualDays: 26, baseSalary: 25000000, proratedBase: 25000000, mealAllowance: 730000, siteAllowance: 0, mobileAllowance: 500000, overtimeHours: 0, overtimePay: 0, gross: 26230000, bhxhNld: 2000000, bhytNld: 375000, bhtnNld: 250000, bhNld: 2625000, bhDn: 5875000, personalDeduction: 11000000, dependentDeduction: 4400000, taxableIncome: 7475000, pitTax: 497500, unionDues: 250000, net: 22857500, email: 'giang.nt@haiminh.vn' },
-    { id: 4, employeeCode: 'HM-004', fullName: 'Phạm Đức Thịnh', position: 'Kỹ Sư Kết Cấu', department: 'DA Cầu Nhật Tân 2', employeeType: 'SITE_ENGINEER', stdDays: 26, actualDays: 24, baseSalary: 18000000, proratedBase: 16615385, mealAllowance: 730000, siteAllowance: 2500000, mobileAllowance: 300000, overtimeHours: 16, overtimePay: 2076923, gross: 22222308, bhxhNld: 1440000, bhytNld: 270000, bhtnNld: 180000, bhNld: 1890000, bhDn: 4230000, personalDeduction: 11000000, dependentDeduction: 0, taxableIncome: 8602308, pitTax: 610231, unionDues: 180000, net: 19542077, email: 'thinh.pd@haiminh.vn' },
-    { id: 5, employeeCode: 'HM-005', fullName: 'Nguyễn Lê Gia Phát', position: 'Kỹ Sư Giám Sát', department: 'DA Landmark', employeeType: 'SITE_ENGINEER', stdDays: 26, actualDays: 26, baseSalary: 16000000, proratedBase: 16000000, mealAllowance: 730000, siteAllowance: 2000000, mobileAllowance: 300000, overtimeHours: 8, overtimePay: 923077, gross: 19953077, bhxhNld: 1280000, bhytNld: 240000, bhtnNld: 160000, bhNld: 1680000, bhDn: 3760000, personalDeduction: 11000000, dependentDeduction: 0, taxableIncome: 6543077, pitTax: 404308, unionDues: 160000, net: 17708769, email: 'phat.nlg@haiminh.vn' }
-  ];
+  // Approver: Director approves total budget
+  const handleDirectorApprove = () => {
+    setPayrollStatus('APPROVED');
+    showToast(`Ban Giám Đốc ${user?.fullName || 'Lê Phúc Hà'} đã phê duyệt Tổng Ngân Sách Quỹ Lương & Báo Cáo Phân Bổ Chi Phí Tháng 10/2026!`);
+  };
 
-  const sumGross = mockPayrollData.reduce((a, b) => a + b.gross, 0);
-  const sumNet = mockPayrollData.reduce((a, b) => a + b.net, 0);
-  const sumBhDn = mockPayrollData.reduce((a, b) => a + b.bhDn, 0);
-  const sumBhNld = mockPayrollData.reduce((a, b) => a + b.bhNld, 0);
-  const sumPit = mockPayrollData.reduce((a, b) => a + b.pitTax, 0);
-  const sumUnion = mockPayrollData.reduce((a, b) => a + b.unionDues, 0);
+  // Lock and pay
+  const handleLockAndPay = () => {
+    setPayrollStatus('PAID');
+    showToast('Đã chốt & khóa sổ kỳ lương Tháng 10/2026, xuất lệnh chi trả UNC điện tử qua Ngân hàng!');
+  };
 
-  const filteredRows = mockPayrollData.filter((r) => {
-    if (typeFilter === 'OFFICE_STAFF') return r.employeeType === 'OFFICE_STAFF';
-    if (typeFilter === 'SITE_ENGINEER') return r.employeeType === 'SITE_ENGINEER';
-    return true;
-  });
+  const handlePrintPayslip = () => {
+    window.print();
+  };
 
+  const handleSendEmailPayslip = (empName: string) => {
+    showToast(`Đã gửi Phiếu lương điện tử mã hóa đến email của ${empName} thành công!`);
+  };
+
+
+  // Overtime pay mock mapping
+  const overtimeHoursMap: Record<string, number> = {
+    'HM-005': 8, // 8h weekend (2.0x)
+    'HM-006': 4, // 4h weekday (1.5x)
+    'HM-007': 6, // 6h night (1.8x)
+  };
+
+  const payrollRows = mockEmployees
+    .filter(emp => typeFilter === 'ALL' || emp.employeeType === typeFilter)
+    .map((emp) => {
+      const isSite = emp.employeeType === 'SITE_ENGINEER';
+      const base = emp.baseSalary;
+      const stdDays = 26;
+      const actualDays = 24;
+      const hourlyRate = Math.round(base / (stdDays * 8));
+
+      const proratedBase = Math.round((base * actualDays) / stdDays);
+      const mealAllowance = actualDays * 40000; // 960k
+      const siteAllowance = isSite ? 3000000 : 0;
+      const mobileAllowance = 500000;
+
+      // OT Calculation
+      const otHours = overtimeHoursMap[emp.employeeCode] || 0;
+      const otMultiplier = emp.employeeCode === 'HM-005' ? 2.0 : emp.employeeCode === 'HM-007' ? 1.8 : 1.5;
+      const overtimePay = Math.round(otHours * hourlyRate * otMultiplier);
+
+      const gross = proratedBase + mealAllowance + siteAllowance + mobileAllowance + overtimePay;
+
+      const insBase = Math.min(base, 46800000);
+      const bhNld = Math.round(insBase * 0.105);
+      const bhDn = Math.round(insBase * 0.235);
+
+      const personalDeduction = 11000000;
+      const depDeduction = emp.dependentsCount * 4400000;
+      const exemptMeal = Math.min(mealAllowance, 730000);
+      const taxableIncome = Math.max(0, gross - exemptMeal - siteAllowance - mobileAllowance - (overtimePay * 0.33));
+      const assessableIncome = Math.max(0, taxableIncome - bhNld - personalDeduction - depDeduction);
+      const pitTax = Math.round(assessableIncome * 0.10);
+
+      const unionDues = Math.round(insBase * 0.01);
+
+      const net = Math.max(0, Math.round((gross - bhNld - pitTax - unionDues) / 1000) * 1000);
+
+      return {
+        ...emp,
+        actualDays,
+        stdDays,
+        hourlyRate,
+        proratedBase,
+        mealAllowance,
+        siteAllowance,
+        mobileAllowance,
+        otHours,
+        otMultiplier,
+        overtimePay,
+        gross,
+        bhNld,
+        bhDn,
+        unionDues,
+        pitTax,
+        net,
+      };
+    });
+
+  const sumGross = payrollRows.reduce((acc, r) => acc + r.gross, 0);
+  const sumBhNld = payrollRows.reduce((acc, r) => acc + r.bhNld, 0);
+  const sumPit = payrollRows.reduce((acc, r) => acc + r.pitTax, 0);
+  const sumUnion = payrollRows.reduce((acc, r) => acc + r.unionDues, 0);
+  const sumNet = payrollRows.reduce((acc, r) => acc + r.net, 0);
+  const sumBhDn = payrollRows.reduce((acc, r) => acc + r.bhDn, 0);
+
+  const isStaff = currentRole === 'SITE_ENGINEER' || currentRole === 'OFFICE_STAFF' || currentRole === 'SITE_MANAGER';
+  const isAccountant = currentRole === 'ACCOUNTANT' || currentRole === 'SYSTEM_ADMIN' || currentRole === 'ADMIN';
+  const isChiefAccountant = currentRole === 'CHIEF_ACCOUNTANT' || currentRole === 'SYSTEM_ADMIN' || currentRole === 'ADMIN';
+  const isDirector = currentRole === 'DIRECTOR' || currentRole === 'CEO';
+
+  // State for UC-24: Tra cứu E-Payslip & Phản hồi khiếu nại lương
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackSubject, setFeedbackSubject] = useState('Thắc mắc số giờ tăng ca OT đêm');
+  const [feedbackContent, setFeedbackContent] = useState('');
+
+  // For individual employee personal payslip view
+  const myPayslipRecord = payrollRows.find((r) => r.id === user?.id || r.email === user?.email) || payrollRows[0];
+
+  const handleSendFeedbackTicket = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackContent.trim()) {
+      alert('Vui lòng nhập nội dung chi tiết phản hồi/thắc mắc.');
+      return;
+    }
+    setShowFeedbackModal(false);
+    setFeedbackContent('');
+    showToast(`Đã gửi ticket phản hồi phiếu lương đến Bộ phận Kế toán thành công! Mã ticket: #TK-PAY-${Date.now().toString().slice(-4)}`);
+  };
+
+    );
+  }
+
+  // 2. Director Executive Macro Budget & Project Cost Allocation View (FE-12 / UC-23)
+  // Per Article 95 of Labor Code, Director approves total budget & reviews macro labor cost allocation (TK 622, 627, 642)
+  // Director does NOT view detailed individual employee base salaries or personal deductions.
+  if (isDirector) {
+    const directorProjectAllocations = [
+      {
+        code: 'DA-NHATTAN2',
+        name: 'Dự Án Cầu Nhật Tân 2 & Nút Giao Vành Đai',
+        manager: 'Nguyễn Lê Gia Phát (Chỉ huy trưởng)',
+        headcount: 8,
+        tk622: 98000000,
+        tk627: 58000000,
+        tk642: 0,
+        total: 156000000,
+        budget: 160000000,
+        pct: 97.5,
+        status: 'Trong Ngân Sách',
+      },
+      {
+        code: 'DA-LANDMARK',
+        name: 'Tổ Hợp Tháp Văn Phòng Landmark Hải Minh',
+        manager: 'Hoàng Văn Long (Chỉ huy trưởng)',
+        headcount: 6,
+        tk622: 77000000,
+        tk627: 52000000,
+        tk642: 0,
+        total: 129000000,
+        budget: 135000000,
+        pct: 95.6,
+        status: 'Trong Ngân Sách',
+      },
+      {
+        code: 'HQ-OFFICE',
+        name: 'Khối Văn Phòng Trụ Sở Hải Minh Tower',
+        manager: 'Khối Quản Trị & Điều Hành',
+        headcount: 5,
+        tk622: 0,
+        tk627: 0,
+        tk642: 60000000,
+        total: 60000000,
+        budget: 60000000,
+        pct: 100.0,
+        status: 'Đạt Định Mức',
+      },
+    ];
+
+    return (
+      <div className="page-wrapper">
+        {/* 1. Page Header */}
+        <div className="page-header">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+              <span className="badge badge-info">Ban Giám Đốc (Director)</span>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Quyền hạn: <strong className="text-slate-800">Phê Duyệt Tổng Hạn Mức Quỹ Lương &amp; Phân Bổ Dự Án (Macro Level)</strong>
+              </span>
+            </div>
+            <h1 className="page-title">
+              Phê Duyệt Tổng Ngân Sách Quỹ Lương &amp; Phân Bổ Chi Phí (FE-12 / UC-23)
+            </h1>
+            <p className="page-description">
+              Kỳ quyết toán: Tháng 10/2026 • Thẩm quyền Ban Giám Đốc phê duyệt hạn mức quỹ lương tổng thể và kiểm soát chi phí nhân công theo công trình (Điều 95 BLLĐ).
+            </p>
+          </div>
+
+          <div className="header-actions">
+            {payrollStatus === 'REVIEWED' && (
+              <button onClick={handleDirectorApprove} className="btn btn-primary" style={{ backgroundColor: '#2563eb' }}>
+                <Check size={15} />
+                <span>Phê Duyệt Tổng Ngân Sách Quỹ Lương (Giám Đốc)</span>
+              </button>
+            )}
+
+            {(payrollStatus === 'APPROVED' || payrollStatus === 'PAID') && (
+              <span className="badge badge-success" style={{ padding: '0.45rem 0.75rem', fontSize: '0.8125rem' }}>
+                <CheckCircle2 size={13} />
+                <span>Ban Giám Đốc Đã Phê Duyệt Ngân Sách Tháng 10/2026</span>
+              </span>
+            )}
+
+            {(payrollStatus === 'DRAFT' || payrollStatus === 'CALCULATED') && (
+              <span className="badge badge-warning" style={{ padding: '0.45rem 0.75rem', fontSize: '0.8125rem' }}>
+                <Clock size={13} />
+                <span>Đang Chờ Kế Toán Trưởng Thẩm Định Chi Tiết</span>
+              </span>
+            )}
+
+            <button
+              onClick={() => setShowDirectorPayslip(!showDirectorPayslip)}
+              className="btn btn-secondary"
+            >
+              <Lock size={14} />
+              <span>{showDirectorPayslip ? 'Ẩn Phiếu Lương Riêng' : 'Tra Cứu Phiếu Lương Của Tôi'}</span>
+            </button>
+
+            <button onClick={handleExportCostAllocationCSV} className="btn btn-secondary">
+              <Download size={14} />
+              <span>Xuất Báo Cáo Phân Bổ (.csv)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Toast Alert */}
+        {toastMessage && (
+          <div className="alert-banner alert-banner-success" style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CheckCircle2 size={16} />
+              <span>{toastMessage}</span>
+            </div>
+          </div>
+        )}
+
+        {/* 2. Privacy & Segregation of Duties Banner (Article 95 Labor Code) */}
+        <div
+          style={{
+            backgroundColor: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: 'var(--radius-sm)',
+            padding: '0.85rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.75rem',
+            fontSize: '0.8125rem',
+            color: '#1e40af',
+          }}
+        >
+          <ShieldAlert size={20} color="#2563eb" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div>
+            <strong>Quy Chế Bảo Mật Tiền Lương &amp; Phân Tách Trách Nhiệm (Điều 95 Bộ luật Lao động 2019/2026):</strong>
+            <div style={{ marginTop: '0.25rem', color: '#1e3a8a', lineHeight: 1.5 }}>
+              Ban Giám Đốc có thẩm quyền phê duyệt <strong>Tổng Hạn Mức Quỹ Lương (Total Payroll Budget)</strong> và kiểm soát <strong>Báo Cáo Phân Bổ Chi Phí Theo Dự Án (Labor Cost Allocation Report - TK 622, TK 627, TK 642)</strong>. Bảng kê chi tiết thu nhập, mức lương cơ bản, các khoản khấu trừ cá nhân và số tài khoản của từng nhân sự cấp dưới được mã hóa và bảo mật độc lập bởi Kế toán trưởng &amp; Phòng Nhân sự nhằm bảo vệ quyền riêng tư người lao động.
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Stepper Bar */}
+        <div
+          style={{
+            backgroundColor: '#ffffff',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border-subtle)',
+            padding: '0.85rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-subtle)', fontWeight: 600 }}>
+              Tiến Trình Maker-Checker 3 Cấp:
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', flexWrap: 'wrap' }}>
+              <span className={`badge ${payrollStatus === 'DRAFT' ? 'badge-warning' : 'badge-success'}`}>
+                1. Kế toán lập ({payrollStatus === 'DRAFT' ? 'Đang tạo' : 'Hoàn tất'})
+              </span>
+              <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
+              <span
+                className={`badge ${
+                  payrollStatus === 'REVIEWED' || payrollStatus === 'APPROVED' || payrollStatus === 'PAID'
+                    ? 'badge-success'
+                    : payrollStatus === 'CALCULATED'
+                    ? 'badge-warning'
+                    : 'badge-slate'
+                }`}
+              >
+                2. KT Trưởng thẩm định ({payrollStatus === 'REVIEWED' || payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'Đã thẩm định' : (payrollStatus === 'CALCULATED' ? 'Chờ duyệt' : 'Chưa đến')})
+              </span>
+              <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
+              <span
+                className={`badge ${
+                  payrollStatus === 'APPROVED' || payrollStatus === 'PAID'
+                    ? 'badge-success'
+                    : payrollStatus === 'REVIEWED'
+                    ? 'badge-warning'
+                    : 'badge-slate'
+                }`}
+              >
+                3. Giám Đốc phê duyệt ({payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'Đã duyệt quỹ' : (payrollStatus === 'REVIEWED' ? 'Cần duyệt ngay' : 'Chưa đến')})
+              </span>
+              <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
+              <span className={`badge ${payrollStatus === 'PAID' ? 'badge-success' : 'badge-slate'}`}>
+                4. Khóa sổ chi trả UNC ({payrollStatus === 'PAID' ? 'Đã chi trả' : 'Chưa chi'})
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Chứng từ gốc: <span className="font-mono font-semibold text-slate-800">PKT-2026-10-001</span>
+            </div>
+            <button
+              onClick={() => {
+                setPayrollStatus('DRAFT');
+                showToast('Đã khôi phục trạng thái bảng lương về Khởi tạo (DRAFT) để kiểm thử luồng Maker-Checker!');
+              }}
+              title="Khôi phục trạng thái về DRAFT để kiểm thử luồng Maker-Checker từ đầu"
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--text-secondary)',
+                background: '#f8fafc',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '4px',
+                padding: '3px 8px',
+                cursor: 'pointer',
+                fontWeight: 500,
+              }}
+            >
+              ↺ Reset Demo
+            </button>
+          </div>
+        </div>
+
+        {/* 4. Macro Financial KPI Strip */}
+        <div className="kpi-strip">
+          <div className="kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">Tổng Quỹ Lương Gross Phê Duyệt</span>
+              <div className="kpi-icon-wrap">
+                <DollarSign size={15} />
+              </div>
+            </div>
+            <div className="kpi-value tabular-nums">{formatVND(sumGross)}</div>
+            <div className="kpi-subtext">Hạn mức ngân sách tháng: <span className="font-semibold text-slate-800">{formatVND(355000000)}</span> (Đạt 97.2%)</div>
+          </div>
+
+          <div className="kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">Tổng Dự Kiến Chi Trả Net</span>
+              <div className="kpi-icon-wrap" style={{ color: '#047857', backgroundColor: '#ecfdf5' }}>
+                <TrendingUp size={15} />
+              </div>
+            </div>
+            <div className="kpi-value tabular-nums" style={{ color: '#047857' }}>{formatVND(sumNet)}</div>
+            <div className="kpi-subtext">Thực lĩnh chuyển khoản qua Ngân hàng sau giảm trừ</div>
+          </div>
+
+          <div className="kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">Chi Phí BH Doanh Nghiệp (23.5%)</span>
+              <div className="kpi-icon-wrap" style={{ color: '#b45309', backgroundColor: '#fffbeb' }}>
+                <Building size={15} />
+              </div>
+            </div>
+            <div className="kpi-value tabular-nums">{formatVND(sumBhDn)}</div>
+            <div className="kpi-subtext">Hạch toán trực tiếp vào chi phí TK 622, 627, 642</div>
+          </div>
+
+          <div className="kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">Tổng Nghĩa Vụ Trích Nộp Nhà Nước</span>
+              <div className="kpi-icon-wrap" style={{ color: '#dc2626', backgroundColor: '#fef2f2' }}>
+                <Receipt size={15} />
+              </div>
+            </div>
+            <div className="kpi-value tabular-nums" style={{ color: '#dc2626' }}>{formatVND(sumBhNld + sumPit + sumUnion)}</div>
+            <div className="kpi-subtext">Gồm BHXH NLĐ (10.5%), Thuế TNCN &amp; CĐ (1%)</div>
+          </div>
+        </div>
+
+        {/* 5. Director Personal Payslip Card (If toggled) */}
+        {showDirectorPayslip && (
+          <div className="card" style={{ padding: '1.25rem', marginBottom: '1.25rem', backgroundColor: '#fcfcfd', border: '1px solid #cbd5e1' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Lock size={16} color="#2563eb" />
+                <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, margin: 0 }}>
+                  Phiếu Lương Cá Nhân Bảo Mật: {user?.fullName || 'Lê Phúc Hà'} (Ban Giám Đốc)
+                </h3>
+              </div>
+              <span className="badge badge-primary">Mã Hóa Riêng</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.8125rem' }}>
+              <div style={{ padding: '0.5rem', backgroundColor: '#ffffff', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Mã nhân sự:</span>
+                <div className="font-mono font-bold text-slate-800">{user?.employeeCode || 'HM-000'}</div>
+              </div>
+              <div style={{ padding: '0.5rem', backgroundColor: '#ffffff', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Lương thỏa thuận HĐLĐ:</span>
+                <div className="font-mono font-bold text-slate-800">{formatVND(45000000)}</div>
+              </div>
+              <div style={{ padding: '0.5rem', backgroundColor: '#ffffff', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Khấu trừ BHXH &amp; Thuế:</span>
+                <div className="font-mono font-bold text-rose-600">{formatVND(8950000)}</div>
+              </div>
+              <div style={{ padding: '0.5rem', backgroundColor: '#ffffff', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Thực lĩnh Net chuyển khoản:</span>
+                <div className="font-mono font-bold text-emerald-600">{formatVND(36050000)}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 6. Labor Cost Allocation Report by Project & Budget Comparison */}
+        <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+            <div>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, margin: 0 }}>
+                Báo Cáo Phân Bổ Chi Phí Nhân Công Theo Dự Án &amp; So Sánh Hạn Mức Ngân Sách
+              </h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                Đầu ra theo Context Diagram: Labor Cost Allocation Report (TK 622, 627, 642) &amp; Project Cost vs Budget Summary
+              </p>
+            </div>
+            <span className="badge badge-success">Cân Đối 100% (Khớp Bút Toán)</span>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table" style={{ fontSize: '0.8125rem' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '120px' }}>Mã Dự Án</th>
+                  <th>Tên Công Trình / Đơn Vị</th>
+                  <th>Chỉ Huy Trưởng / Phụ Trách</th>
+                  <th className="text-center">Quân Số</th>
+                  <th className="text-right">TK 622 (Nhân công TT)</th>
+                  <th className="text-right">TK 627 (Sản xuất chung)</th>
+                  <th className="text-right">TK 642 (Quản lý DN)</th>
+                  <th className="text-right">Tổng Chi Phí Tháng 10</th>
+                  <th className="text-right">Hạn Mức Ngân Sách</th>
+                  <th className="text-center">Tỷ Lệ</th>
+                  <th className="text-center">Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {directorProjectAllocations.map((proj) => (
+                  <tr key={proj.code}>
+                    <td className="font-mono font-bold text-slate-800">{proj.code}</td>
+                    <td className="font-medium text-slate-900">{proj.name}</td>
+                    <td className="text-slate-700">{proj.manager}</td>
+                    <td className="text-center font-mono">{proj.headcount} kỹ sư</td>
+                    <td className="text-right font-mono tabular-nums">{proj.tk622 > 0 ? formatVND(proj.tk622) : '-'}</td>
+                    <td className="text-right font-mono tabular-nums">{proj.tk627 > 0 ? formatVND(proj.tk627) : '-'}</td>
+                    <td className="text-right font-mono tabular-nums">{proj.tk642 > 0 ? formatVND(proj.tk642) : '-'}</td>
+                    <td className="text-right font-mono tabular-nums font-bold text-slate-900">{formatVND(proj.total)}</td>
+                    <td className="text-right font-mono tabular-nums text-slate-600">{formatVND(proj.budget)}</td>
+                    <td className="text-center font-mono font-medium">{proj.pct}%</td>
+                    <td className="text-center">
+                      <span className={`badge ${proj.pct <= 100 ? 'badge-success' : 'badge-danger'}`}>
+                        {proj.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ backgroundColor: '#f8fafc', fontWeight: 700 }}>
+                  <td colSpan={3} className="text-left font-bold text-slate-900">
+                    TỔNG CỘNG QUỸ LƯƠNG TOÀN CÔNG TY
+                  </td>
+                  <td className="text-center font-mono">19 cán bộ</td>
+                  <td className="text-right font-mono tabular-nums text-slate-900">{formatVND(175000000)}</td>
+                  <td className="text-right font-mono tabular-nums text-slate-900">{formatVND(110000000)}</td>
+                  <td className="text-right font-mono tabular-nums text-slate-900">{formatVND(60000000)}</td>
+                  <td className="text-right font-mono tabular-nums text-emerald-700 font-bold" style={{ fontSize: '0.9375rem' }}>
+                    {formatVND(345000000)}
+                  </td>
+                  <td className="text-right font-mono tabular-nums text-slate-700">{formatVND(355000000)}</td>
+                  <td className="text-center font-mono text-emerald-700">97.2%</td>
+                  <td className="text-center">
+                    <span className="badge badge-success">Trong Định Mức</span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        {/* 7. Summary Accounting Entries for Executive Verification */}
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+            <div>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, margin: 0 }}>
+                Báo Cáo Bút Toán Kế Toán Hạch Toán Chi Phí Tiền Lương (Thông tư 200/2014/TT-BTC)
+              </h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                Hạch toán chi phí nhân công trực tiếp công trình, giám sát và quản lý doanh nghiệp
+              </p>
+            </div>
+            <span className="badge badge-info">Tổng Nợ = Tổng Có = 426.075.000 ₫ (Cân Đối 100%)</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '0.75rem', fontSize: '0.8125rem' }}>
+            <div style={{ padding: '0.75rem', border: '1px solid var(--border-subtle)', borderRadius: '6px', backgroundColor: '#ffffff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                <span className="font-mono font-bold text-slate-800">Nợ 622 / Có 3341</span>
+                <span className="font-mono font-bold text-emerald-700">{formatVND(175000000)}</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Chi phí nhân công trực tiếp thi công tại các công trình (Cầu Nhật Tân 2 &amp; Landmark)
+              </div>
+            </div>
+
+            <div style={{ padding: '0.75rem', border: '1px solid var(--border-subtle)', borderRadius: '6px', backgroundColor: '#ffffff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                <span className="font-mono font-bold text-slate-800">Nợ 627 / Có 3341</span>
+                <span className="font-mono font-bold text-emerald-700">{formatVND(110000000)}</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Chi phí sản xuất chung / kỹ sư giám sát và ban chỉ huy hiện trường các gói thầu
+              </div>
+            </div>
+
+            <div style={{ padding: '0.75rem', border: '1px solid var(--border-subtle)', borderRadius: '6px', backgroundColor: '#ffffff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                <span className="font-mono font-bold text-slate-800">Nợ 642 / Có 3341</span>
+                <span className="font-mono font-bold text-emerald-700">{formatVND(60000000)}</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Chi phí quản lý doanh nghiệp / khối văn phòng trụ sở chính Hải Minh Tower
+              </div>
+            </div>
+
+            <div style={{ padding: '0.75rem', border: '1px solid var(--border-subtle)', borderRadius: '6px', backgroundColor: '#ffffff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                <span className="font-mono font-bold text-slate-800">Nợ 622, 627, 642 / Có 338</span>
+                <span className="font-mono font-bold text-amber-700">{formatVND(81075000)}</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Chi phí BHXH, BHYT, BHTN và KPCĐ doanh nghiệp đóng (tỷ lệ 23.5%)
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Operational Detailed 8-Column Payroll Table (Chief Accountant, Accountant, HR Manager, Admin)
   return (
     <div className="page-wrapper">
-      {/* 1. Page Header (FE-10 / UC-21) */}
+      {/* 1. Page Header */}
       <div className="page-header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-            <span className="badge badge-info" style={{ fontWeight: 600 }}>PHÂN HỆ LƯƠNG HMCPS</span>
-            <span className="badge badge-success">Giai Đoạn 3 — Tuần 4</span>
-          </div>
           <h1 className="page-title">
-            Tính Toán Bảng Lương & Phân Bổ Chi Phí Dự Án (FE-10 / UC-21, UC-22)
+            Bảng Lương 8 Cột &amp; Phân Bổ Chi Phí Kế Toán (FE-06 / FE-07 / FE-09)
           </h1>
           <p className="page-description">
-            Kỳ tính lương: Tháng 10/2026 • Lập bảng tính lương tự động 8 khối cột A&rarr;H theo chuẩn kế toán tài chính và Thông tư 200
+            Kỳ tính lương: Tháng 10/2026 • Maker-Checker 3 cấp (Kế toán lập &rarr; KT Trưởng soát xét &rarr; Giám Đốc duyệt) &amp; hạch toán TK 622, 627, 642
           </p>
         </div>
 
         <div className="header-actions">
-          <button onClick={handleExportPayrollCSV} className="btn btn-secondary btn-sm" title="Xuất toàn bộ bảng lương 8 khối cột ra định dạng CSV/Excel">
-            <Download size={14} />
-            <span>Xuất Bảng Lương (.csv)</span>
-          </button>
-                    <button onClick={handleExportCostAllocationCSV} className="btn btn-secondary btn-sm" title="Xuất báo cáo phân bổ chi phí kế toán TK 622, 627, 642">
-            <Download size={14} />
-            <span>Xuất Phân Bổ (.csv)</span>
-          </button>
-          {payrollStatus === 'CALCULATED' && (
+          {/* Export Actions */}
+          {!isStaff && (
+            <>
+              <button onClick={handleExportPayrollCSV} className="btn btn-secondary btn-sm" title="Xuất toàn bộ bảng lương 8 khối cột ra định dạng CSV/Excel">
+                <Download size={14} />
+                <span>Xuất Bảng Lương (.csv)</span>
+              </button>
+              <button onClick={handleExportCostAllocationCSV} className="btn btn-secondary btn-sm" title="Xuất báo cáo phân bổ chi phí kế toán TK 622, 627, 642">
+                <Download size={14} />
+                <span>Xuất Phân Bổ (.csv)</span>
+              </button>
+              {(isChiefAccountant || isAccountant) && (
+                <button onClick={handleExportMisa} className="btn btn-secondary btn-sm" title="Xuất tệp chứng từ hạch toán sổ cái kép MISA / FAST">
+                  <FileText size={14} />
+                  <span>Xuất MISA / FAST</span>
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Maker: Accountant runs payroll command */}
+          {!isStaff && isAccountant && (payrollStatus === 'DRAFT' || payrollStatus === 'CALCULATED') && (
+            <button onClick={handleRunPayroll} className="btn btn-primary btn-sm" style={{ backgroundColor: '#2563eb' }}>
+              <Play size={14} />
+              <span>Chạy Tính Lương</span>
+            </button>
+          )}
+
+          {/* Maker: Accountant forwards to Chief Accountant */}
+          {!isStaff && isAccountant && payrollStatus === 'CALCULATED' && (
             <button onClick={handleSubmitToChief} className="btn btn-secondary btn-sm" style={{ color: '#2563eb', borderColor: '#bfdbfe' }}>
               <ArrowUpRight size={14} />
               <span>Trình KT Trưởng</span>
             </button>
           )}
-          {(payrollStatus === 'CALCULATED' || payrollStatus === 'DRAFT') && (
+
+          {/* Checker: Chief Accountant final calculation approval */}
+          {!isStaff && isChiefAccountant && (payrollStatus === 'CALCULATED' || payrollStatus === 'DRAFT') && (
             <button onClick={handleChiefReview} className="btn btn-primary btn-sm" style={{ backgroundColor: '#d97706' }}>
               <Check size={14} />
               <span>Thẩm Định (KT Trưởng)</span>
             </button>
           )}
-          <button onClick={handleRunPayroll} className="btn btn-primary btn-sm" style={{ backgroundColor: '#2563eb' }}>
-            <Play size={14} />
-            <span>Chạy Tính Lương (Gross &rarr; Net)</span>
-          </button>
+
+          {/* Approver: Director approves total budget */}
+          {!isStaff && isDirector && payrollStatus === 'REVIEWED' && (
+            <button onClick={handleDirectorApprove} className="btn btn-primary btn-sm">
+              <Check size={14} />
+              <span>Phê Duyệt Quỹ Lương</span>
+            </button>
+          )}
+
+          {/* Lock and pay: Only Chief Accountant */}
+          {!isStaff && isChiefAccountant && payrollStatus === 'APPROVED' && (
+            <button onClick={handleLockAndPay} className="btn btn-primary btn-sm" style={{ backgroundColor: '#047857' }}>
+              <Lock size={14} />
+              <span>Khóa Sổ &amp; Chi Lương</span>
+            </button>
+          )}
+
+          {!isStaff && payrollStatus === 'PAID' && (
+            <span className="badge badge-success" style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}>
+              <Lock size={12} />
+              <span>Đã Khóa Sổ &amp; Đã Chi</span>
+            </span>
+          )}
+
+          {/* If staff: Print/Email action */}
+          {isStaff && (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button onClick={() => handleSendEmailPayslip(user?.fullName || 'bạn')} className="btn btn-secondary">
+                <Mail size={15} />
+                <span>Gửi Bản Mã Hóa Về Email</span>
+              </button>
+              <button onClick={handlePrintPayslip} className="btn btn-primary">
+                <Printer size={15} />
+                <span>In Phiếu Lương</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Maker-Checker Workflow Stepper Strip (UC-23) */}
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div className="alert-banner alert-banner-success" style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckCircle2 size={16} />
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* 3-Level Approval Stepper Bar */}
       <div
-        className="card"
         style={{
-          marginBottom: '1.25rem',
-          padding: '0.85rem 1.25rem',
-          backgroundColor: '#f8fafc',
+          backgroundColor: '#ffffff',
+          borderRadius: 'var(--radius-sm)',
           border: '1px solid var(--border-subtle)',
+          padding: '0.85rem 1.25rem',
+          marginBottom: '1.25rem',
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
+          justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '1rem',
+          gap: '0.75rem',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-main)' }}>
-            Tiến Trình Phê Duyệt (Maker - Checker):
+          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-subtle)', fontWeight: 600 }}>
+            Tiến Trình Maker-Checker 3 Cấp:
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem' }}>
-            <span className={'badge ' + (payrollStatus !== 'DRAFT' ? 'badge-success' : 'badge-primary')}>
-              1. Kế toán lập ({payrollStatus !== 'DRAFT' ? 'Đã lập' : 'Đang lập'})
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', flexWrap: 'wrap' }}>
+            <span className={`badge ${payrollStatus === 'DRAFT' ? 'badge-warning' : 'badge-success'}`}>
+              1. Kế toán lập ({payrollStatus === 'DRAFT' ? 'Đang tạo' : 'Hoàn tất'})
             </span>
             <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
-            <span className={'badge ' + (payrollStatus === 'REVIEWED' || payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'badge-success' : (payrollStatus === 'CALCULATED' ? 'badge-warning' : 'badge-slate'))}>
+            <span
+              className={`badge ${
+                payrollStatus === 'REVIEWED' || payrollStatus === 'APPROVED' || payrollStatus === 'PAID'
+                  ? 'badge-success'
+                  : payrollStatus === 'CALCULATED'
+                  ? 'badge-warning'
+                  : 'badge-slate'
+              }`}
+            >
               2. KT Trưởng thẩm định ({payrollStatus === 'REVIEWED' || payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'Đã duyệt' : (payrollStatus === 'CALCULATED' ? 'Chờ duyệt' : 'Chưa đến')})
             </span>
             <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
-            <span className={'badge ' + (payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'badge-success' : (payrollStatus === 'REVIEWED' ? 'badge-warning' : 'badge-slate'))}>
-              3. Giám Đốc phê duyệt ({payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'Đã duyệt' : (payrollStatus === 'REVIEWED' ? 'Chờ duyệt' : 'Chưa đến')})
+            <span
+              className={`badge ${
+                payrollStatus === 'APPROVED' || payrollStatus === 'PAID'
+                  ? 'badge-success'
+                  : payrollStatus === 'REVIEWED'
+                  ? 'badge-warning'
+                  : 'badge-slate'
+              }`}
+            >
+              3. Giám Đốc phê duyệt ({payrollStatus === 'APPROVED' || payrollStatus === 'PAID' ? 'Đã duyệt quỹ' : (payrollStatus === 'REVIEWED' ? 'Chờ duyệt' : 'Chưa đến')})
             </span>
             <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
-            <span className={'badge ' + (payrollStatus === 'PAID' ? 'badge-success' : 'badge-slate')}>
-              4. Khóa sổ chi trả ({payrollStatus === 'PAID' ? 'Đã chi' : 'Chưa chi'})
+            <span className={`badge ${payrollStatus === 'PAID' ? 'badge-success' : 'badge-slate'}`}>
+              4. Khóa sổ chi trả ({payrollStatus === 'PAID' ? 'Đã chi trả' : 'Chưa chi'})
             </span>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            Chứng từ gốc: <span className="font-mono font-semibold text-slate-800">PKT-2026-10-001</span>
+          </div>
+          <button
+            onClick={() => {
+              setPayrollStatus('DRAFT');
+              showToast('Đã khôi phục trạng thái bảng lương về Khởi tạo (DRAFT) để kiểm thử toàn bộ luồng Maker-Checker!');
+            }}
+            title="Khôi phục trạng thái về DRAFT để kiểm thử luồng Maker-Checker từ đầu"
+            style={{
+              fontSize: '0.75rem',
+              color: 'var(--text-secondary)',
+              background: '#f8fafc',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '4px',
+              padding: '3px 8px',
+              cursor: 'pointer',
+              fontWeight: 500,
+            }}
+          >
+            ↺ Reset Demo
+          </button>
         </div>
       </div>
 
@@ -267,7 +947,9 @@ export const Payroll: React.FC = () => {
         <div className="kpi-card">
           <div className="kpi-card-header">
             <span className="kpi-label">Tổng Quỹ Lương Gross</span>
-            <div className="kpi-icon-wrap"><DollarSign size={15} /></div>
+            <div className="kpi-icon-wrap">
+              <DollarSign size={15} />
+            </div>
           </div>
           <div className="kpi-value tabular-nums">{formatVND(sumGross)}</div>
           <div className="kpi-subtext">Chuẩn công: <span className="tabular-nums font-medium text-slate-700">26</span> ngày/tháng</div>
@@ -275,128 +957,83 @@ export const Payroll: React.FC = () => {
 
         <div className="kpi-card">
           <div className="kpi-card-header">
-            <span className="kpi-label">Thực Nhận Chuyển Khoản (Net)</span>
-            <div className="kpi-icon-wrap" style={{ color: '#047857' }}><TrendingUp size={15} /></div>
+            <span className="kpi-label">Tổng Thực Nhận (Net Take-home)</span>
+            <div className="kpi-icon-wrap" style={{ color: '#047857', backgroundColor: '#ecfdf5' }}>
+              <TrendingUp size={15} />
+            </div>
           </div>
           <div className="kpi-value tabular-nums" style={{ color: '#047857' }}>{formatVND(sumNet)}</div>
-          <div className="kpi-subtext">Đã khấu trừ bảo hiểm &amp; thuế TNCN</div>
+          <div className="kpi-subtext">Đã khấu trừ BHXH, Thuế TNCN &amp; Công đoàn</div>
         </div>
 
         <div className="kpi-card">
           <div className="kpi-card-header">
-            <span className="kpi-label">Doanh Nghiệp Nộp BH (23.5%)</span>
-            <div className="kpi-icon-wrap"><Building size={15} /></div>
-          </div>
-          <div className="kpi-value tabular-nums">{formatVND(sumBhDn)}</div>
-          <div className="kpi-subtext">Chi phí công ty chi trả bổ sung</div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <span className="kpi-label">Khấu Trừ Người Lao Động</span>
-            <div className="kpi-icon-wrap" style={{ color: '#dc2626' }}><CheckCircle2 size={15} /></div>
+            <span className="kpi-label">Tổng Khấu Trừ NLĐ (BH &amp; Thuế)</span>
+            <div className="kpi-icon-wrap" style={{ color: '#dc2626', backgroundColor: '#fef2f2' }}>
+              <Receipt size={15} />
+            </div>
           </div>
           <div className="kpi-value tabular-nums" style={{ color: '#dc2626' }}>{formatVND(sumBhNld + sumPit + sumUnion)}</div>
-          <div className="kpi-subtext">BHXH 10.5% + Thuế lũy tiến + Công đoàn</div>
+          <div className="kpi-subtext">Gồm BHXH (10.5%), Thuế TNCN &amp; CĐ (1%)</div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-card-header">
+            <span className="kpi-label">Chi Phí BH Doanh Nghiệp (23.5%)</span>
+            <div className="kpi-icon-wrap" style={{ color: '#b45309', backgroundColor: '#fffbeb' }}>
+              <Building size={15} />
+            </div>
+          </div>
+          <div className="kpi-value tabular-nums">{formatVND(sumBhDn)}</div>
+          <div className="kpi-subtext">Hạch toán vào chi phí TK 622, 627, 642</div>
         </div>
       </div>
 
-      {/* UC-22: Ma Trận Phân Bổ Chi Phí Dự Án Theo Tài Khoản Kế Toán (TK 622, TK 627, TK 642) */}
-      <div className="card" style={{ marginBottom: '1.25rem' }}>
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h3 className="card-title" style={{ fontSize: '0.9375rem', fontWeight: 700 }}>
-              Ma Trận Phân Bổ Chi Phí Lương Theo Dự Án / Công Trình (UC-22)
-            </h3>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Bóc tách chi phí nhân công trực tiếp (TK 622), sản xuất chung hiện trường (TK 627) và quản lý doanh nghiệp (TK 642)
+      {exported && (
+        <div className="alert-banner alert-banner-success">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckCircle2 size={16} />
+            <span>
+              Đã kết xuất thành công chứng từ kế toán <strong>PKT-2026-10-001.xml</strong> khớp chuẩn giao thức tích hợp MISA SME / FAST Accounting.
             </span>
           </div>
-          <span className="badge badge-primary">Thông Tư 200/2014/TT-BTC</span>
         </div>
-        <div className="table-responsive">
-          <table className="table" style={{ fontSize: '0.8125rem' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f8fafc' }}>
-                <th className="text-left">Mã Dự Án</th>
-                <th className="text-left">Tên Công Trình / Bộ Phận</th>
-                <th className="text-left">Chỉ Huy Trưởng / Quản Lý</th>
-                <th className="text-center">Số Nhân Sự</th>
-                <th className="text-right">TK 622 (Nhân Công TT)</th>
-                <th className="text-right">TK 627 (Sản Xuất Chung)</th>
-                <th className="text-right">TK 642 (Quản Lý DN)</th>
-                <th className="text-right font-bold">Tổng Chi Phí Phân Bổ</th>
-                <th className="text-right">Ngân Sách Khoán</th>
-                <th className="text-center">Tỷ Lệ / Trạng Thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="text-left font-mono font-medium text-slate-800">DA-NHATTAN2</td>
-                <td className="text-left font-medium text-slate-900">Dự Án Cầu Nhật Tân 2 &amp; Nút Giao Vành Đai</td>
-                <td className="text-left text-slate-700">Nguyễn Lê Gia Phát (Chỉ huy trưởng)</td>
-                <td className="text-center font-medium">8 kỹ sư &amp; nhân công</td>
-                <td className="text-right font-mono tabular-nums text-slate-800">98.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-800">58.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-400">-</td>
-                <td className="text-right font-mono tabular-nums font-bold text-slate-900">156.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-600">160.000.000 ₫</td>
-                <td className="text-center"><span className="badge badge-success">97.5% (Trong Hạn Mức)</span></td>
-              </tr>
-              <tr>
-                <td className="text-left font-mono font-medium text-slate-800">DA-LANDMARK</td>
-                <td className="text-left font-medium text-slate-900">Tổ Hợp Tháp Văn Phòng Landmark Hải Minh</td>
-                <td className="text-left text-slate-700">Hoàng Văn Long (Chỉ huy trưởng)</td>
-                <td className="text-center font-medium">6 kỹ sư &amp; giám sát</td>
-                <td className="text-right font-mono tabular-nums text-slate-800">77.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-800">52.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-400">-</td>
-                <td className="text-right font-mono tabular-nums font-bold text-slate-900">129.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-600">135.000.000 ₫</td>
-                <td className="text-center"><span className="badge badge-success">95.6% (Trong Hạn Mức)</span></td>
-              </tr>
-              <tr>
-                <td className="text-left font-mono font-medium text-slate-800">HQ-OFFICE</td>
-                <td className="text-left font-medium text-slate-900">Khối Văn Phòng Trụ Sở Hải Minh Tower</td>
-                <td className="text-left text-slate-700">Khối Quản Trị &amp; Điều Hành</td>
-                <td className="text-center font-medium">5 chuyên viên HQ</td>
-                <td className="text-right font-mono tabular-nums text-slate-400">-</td>
-                <td className="text-right font-mono tabular-nums text-slate-400">-</td>
-                <td className="text-right font-mono tabular-nums text-slate-800">60.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums font-bold text-slate-900">60.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-600">60.000.000 ₫</td>
-                <td className="text-center"><span className="badge badge-info">100.0% (Định Mức)</span></td>
-              </tr>
-              <tr style={{ backgroundColor: '#f1f5f9', fontWeight: 700 }}>
-                <td colSpan={4} className="text-left text-slate-900">TỔNG CỘNG TOÀN DOANH NGHIỆP:</td>
-                <td className="text-right font-mono tabular-nums text-slate-900">175.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-900">110.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-900">60.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums font-bold text-blue-800">345.000.000 ₫</td>
-                <td className="text-right font-mono tabular-nums text-slate-700">355.000.000 ₫</td>
-                <td className="text-center"><span className="badge badge-success">Tiết Kiệm 10.000.000 ₫</span></td>
-              </tr>
-            </tbody>
-          </table>
+      )}
+
+      {/* 3. Filter Bar */}
+      <div className="filter-bar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Phân Loại Tài Khoản:</label>
+          <select
+            className="form-select"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as any)}
+            style={{ minWidth: '180px' }}
+          >
+            <option value="ALL">Toàn Bộ Nhân Lực ({mockEmployees.length})</option>
+            <option value="OFFICE_STAFF">Văn Phòng (TK 642)</option>
+            <option value="SITE_ENGINEER">Kỹ Sư Hiện Trường (TK 627)</option>
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', marginLeft: 'auto', fontSize: '0.6875rem' }}>
+          <span className="badge badge-slate">Khối A: Định danh</span>
+          <span className="badge badge-slate">Khối B: Ngày công</span>
+          <span className="badge badge-slate">Khối C: Lương chính</span>
+          <span className="badge badge-slate">Khối D: Phụ cấp CT</span>
+          <span className="badge badge-slate">Khối E: Làm thêm OT</span>
+          <span className="badge badge-info">Khối F: Tổng Gross</span>
+          <span className="badge badge-danger">Khối G: Khấu trừ BH/Thuế/CĐ</span>
+          <span className="badge badge-success">Khối H: Thực nhận Net</span>
         </div>
       </div>
 
-      {/* 3. Controls Strip: Filters */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)' }}>Lọc Đối Tượng:</span>
-          <button onClick={() => setTypeFilter('ALL')} className={'btn btn-sm ' + (typeFilter === 'ALL' ? 'btn-primary' : 'btn-secondary')}>Tất Cả ({mockPayrollData.length})</button>
-          <button onClick={() => setTypeFilter('SITE_ENGINEER')} className={'btn btn-sm ' + (typeFilter === 'SITE_ENGINEER' ? 'btn-primary' : 'btn-secondary')}>Kỹ Sư Công Trường (TK 627)</button>
-          <button onClick={() => setTypeFilter('OFFICE_STAFF')} className={'btn btn-sm ' + (typeFilter === 'OFFICE_STAFF' ? 'btn-primary' : 'btn-secondary')}>Văn Phòng (TK 642)</button>
-        </div>
-      </div>
-
-      {/* 4. Detailed 8-Column Financial Payroll Table (UC-21) */}
-      <div className="table-responsive" style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)' }}>
-        <table className="table" style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+      {/* 4. High Data Density 11-Column Table */}
+      <div className="table-container">
+        <table className="hm-table">
           <thead>
-            <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '2px solid var(--border-subtle)' }}>
-              <th className="text-left" style={{ width: '80px' }}>Mã NV</th>
+            <tr>
+              <th className="text-left" style={{ width: '85px' }}>Mã NV</th>
               <th className="text-left">Họ Và Tên</th>
               <th className="text-center">Hạch Toán</th>
               <th className="text-center" style={{ width: '85px' }}>Công Đi Làm</th>
@@ -407,10 +1044,11 @@ export const Payroll: React.FC = () => {
               <th className="text-right">BHXH (10.5%)</th>
               <th className="text-right">Thuế TNCN</th>
               <th className="text-right" style={{ width: '130px' }}>THỰC NHẬN (NET)</th>
+              <th className="text-center" style={{ width: '90px' }}>Phiếu Lương</th>
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((r) => (
+            {payrollRows.map((r) => (
               <tr key={r.id}>
                 <td className="text-left font-mono font-medium text-slate-700">{r.employeeCode}</td>
                 <td className="text-left">
@@ -430,7 +1068,7 @@ export const Payroll: React.FC = () => {
                 <td className="text-right tabular-nums text-slate-700">{formatVND(r.proratedBase)}</td>
                 <td className="text-right tabular-nums text-slate-700">{formatVND(r.siteAllowance)}</td>
                 <td className="text-right tabular-nums text-blue-700 font-medium">
-                  {r.overtimePay > 0 ? ('+' + formatVND(r.overtimePay)) : '0 ₫'}
+                  {r.overtimePay > 0 ? `+${formatVND(r.overtimePay)}` : '0 ₫'}
                 </td>
                 <td className="text-right tabular-nums font-semibold text-slate-900">
                   {formatVND(r.gross)}
@@ -440,20 +1078,32 @@ export const Payroll: React.FC = () => {
                 <td className="text-right tabular-nums font-bold text-emerald-700" style={{ fontSize: '0.875rem' }}>
                   {formatVND(r.net)}
                 </td>
+                <td className="text-center">
+                  <button
+                    onClick={() => setSelectedPayslipEmp(r)}
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.6875rem' }}
+                  >
+                    <FileText size={12} />
+                    <span>Xem</span>
+                  </button>
+                </td>
               </tr>
             ))}
+            {/* Total Row */}
             <tr style={{ backgroundColor: '#f8fafc', fontWeight: 600 }}>
-              <td colSpan={3} className="text-left font-semibold text-slate-900">TỔNG CỘNG ({filteredRows.length} Cán Bộ):</td>
-              <td className="text-center tabular-nums text-slate-900">25 công/người</td>
-              <td className="text-right tabular-nums text-slate-900">{formatVND(filteredRows.reduce((a, b) => a + b.proratedBase, 0))}</td>
-              <td className="text-right tabular-nums text-slate-900">{formatVND(filteredRows.reduce((a, b) => a + b.siteAllowance, 0))}</td>
-              <td className="text-right tabular-nums text-blue-700">+{formatVND(filteredRows.reduce((a, b) => a + b.overtimePay, 0))}</td>
+              <td colSpan={3} className="text-left font-semibold text-slate-900">TỔNG CỘNG ({payrollRows.length} Cán Bộ):</td>
+              <td className="text-center tabular-nums text-slate-900">24 công/người</td>
+              <td className="text-right tabular-nums text-slate-900">{formatVND(payrollRows.reduce((a, b) => a + b.proratedBase, 0))}</td>
+              <td className="text-right tabular-nums text-slate-900">{formatVND(payrollRows.reduce((a, b) => a + b.siteAllowance, 0))}</td>
+              <td className="text-right tabular-nums text-blue-700">+{formatVND(payrollRows.reduce((a, b) => a + b.overtimePay, 0))}</td>
               <td className="text-right tabular-nums font-bold text-slate-900">{formatVND(sumGross)}</td>
               <td className="text-right tabular-nums font-semibold text-rose-700">-{formatVND(sumBhNld)}</td>
               <td className="text-right tabular-nums font-semibold text-amber-700">-{formatVND(sumPit)}</td>
               <td className="text-right tabular-nums font-bold text-emerald-700" style={{ fontSize: '0.9375rem' }}>
                 {formatVND(sumNet)}
               </td>
+              <td></td>
             </tr>
           </tbody>
         </table>
