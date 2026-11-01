@@ -108,6 +108,31 @@ export const Payroll: React.FC = () => {
     showToast('Đã kết xuất và tải về thành công Bảng Lương 8 Khối Cột định dạng CSV/Excel!');
   };
 
+  const handleExportCostAllocationCSV = () => {
+    const headers = ['Mã Công Trình / Dự Án', 'Tên Dự Án Thi Công', 'Chỉ Huy Trưởng', 'Quân Số', 'TK 622 (Nhân Công TT)', 'TK 627 (SXC Hiện Trường)', 'TK 642 (Quản Lý Doanh Nghiệp)', 'Tổng Chi Phí Phân Bổ', 'Ngân Sách Khoán Dự Án', 'Tỷ Lệ Thực Hiện'];
+    const rows = [
+      ['DA-NHATTAN2', '"Dự Án Cầu Nhật Tân 2 & Nút Giao Vành Đai"', '"Nguyễn Lê Gia Phát (Chỉ huy trưởng)"', 8, 98000000, 58000000, 0, 156000000, 160000000, '"97.5%"'],
+      ['DA-LANDMARK', '"Tổ Hợp Tháp Văn Phòng Landmark Hải Minh"', '"Hoàng Văn Long (Chỉ huy trưởng)"', 6, 77000000, 52000000, 0, 129000000, 135000000, '"95.6%"'],
+      ['HQ-OFFICE', '"Khối Văn Phòng Trụ Sở Hải Minh Tower"', '"Khối Quản Trị & Điều Hành"', 5, 0, 0, 60000000, 60000000, 60000000, '"100.0%"']
+    ];
+    const csvContent = [
+      'BÁO CÁO PHÂN BỔ CHI PHÍ TIỀN LƯƠNG THEO MÃ CÔNG TRÌNH / DỰ ÁN (TK 622, TK 627, TK 642) - THÔNG TƯ 200',
+      'Kỳ kế toán: Tháng 10/2026 | Ngày xuất: ' + new Date().toLocaleString('vi-VN'),
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\r\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'HMCPS_Phan_Bo_Chi_Phi_Cong_Trinh_T10_2026.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Đã kết xuất và tải về thành công Báo Cáo Phân Bổ Chi Phí Kế Toán Dự Án!');
+  };
+
   const handleRunPayroll = async () => {
     try {
       showToast('Đang thực thi động cơ tính lương PayrollEngine Gross-to-Net tự động...');
@@ -151,7 +176,7 @@ export const Payroll: React.FC = () => {
             <span className="badge badge-success">Giai Đoạn 3 — Tuần 4</span>
           </div>
           <h1 className="page-title">
-            Bảng Tính Lương Tự Động 8 Cột (FE-10 / UC-21)
+            Tính Toán Bảng Lương & Phân Bổ Chi Phí Dự Án (FE-10 / UC-21, UC-22)
           </h1>
           <p className="page-description">
             Kỳ tính lương: Tháng 10/2026 • Lập bảng tính lương tự động 8 khối cột A&rarr;H theo chuẩn kế toán tài chính và Thông tư 200
@@ -162,6 +187,10 @@ export const Payroll: React.FC = () => {
           <button onClick={handleExportPayrollCSV} className="btn btn-secondary btn-sm" title="Xuất toàn bộ bảng lương 8 khối cột ra định dạng CSV/Excel">
             <Download size={14} />
             <span>Xuất Bảng Lương (.csv)</span>
+          </button>
+                    <button onClick={handleExportCostAllocationCSV} className="btn btn-secondary btn-sm" title="Xuất báo cáo phân bổ chi phí kế toán TK 622, 627, 642">
+            <Download size={14} />
+            <span>Xuất Phân Bổ (.csv)</span>
           </button>
           <button onClick={handleRunPayroll} className="btn btn-primary btn-sm" style={{ backgroundColor: '#2563eb' }}>
             <Play size={14} />
@@ -206,6 +235,86 @@ export const Payroll: React.FC = () => {
           </div>
           <div className="kpi-value tabular-nums" style={{ color: '#dc2626' }}>{formatVND(sumBhNld + sumPit + sumUnion)}</div>
           <div className="kpi-subtext">BHXH 10.5% + Thuế lũy tiến + Công đoàn</div>
+        </div>
+      </div>
+
+      {/* UC-22: Ma Trận Phân Bổ Chi Phí Dự Án Theo Tài Khoản Kế Toán (TK 622, TK 627, TK 642) */}
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 className="card-title" style={{ fontSize: '0.9375rem', fontWeight: 700 }}>
+              Ma Trận Phân Bổ Chi Phí Lương Theo Dự Án / Công Trình (UC-22)
+            </h3>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Bóc tách chi phí nhân công trực tiếp (TK 622), sản xuất chung hiện trường (TK 627) và quản lý doanh nghiệp (TK 642)
+            </span>
+          </div>
+          <span className="badge badge-primary">Thông Tư 200/2014/TT-BTC</span>
+        </div>
+        <div className="table-responsive">
+          <table className="table" style={{ fontSize: '0.8125rem' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f8fafc' }}>
+                <th className="text-left">Mã Dự Án</th>
+                <th className="text-left">Tên Công Trình / Bộ Phận</th>
+                <th className="text-left">Chỉ Huy Trưởng / Quản Lý</th>
+                <th className="text-center">Số Nhân Sự</th>
+                <th className="text-right">TK 622 (Nhân Công TT)</th>
+                <th className="text-right">TK 627 (Sản Xuất Chung)</th>
+                <th className="text-right">TK 642 (Quản Lý DN)</th>
+                <th className="text-right font-bold">Tổng Chi Phí Phân Bổ</th>
+                <th className="text-right">Ngân Sách Khoán</th>
+                <th className="text-center">Tỷ Lệ / Trạng Thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="text-left font-mono font-medium text-slate-800">DA-NHATTAN2</td>
+                <td className="text-left font-medium text-slate-900">Dự Án Cầu Nhật Tân 2 &amp; Nút Giao Vành Đai</td>
+                <td className="text-left text-slate-700">Nguyễn Lê Gia Phát (Chỉ huy trưởng)</td>
+                <td className="text-center font-medium">8 kỹ sư &amp; nhân công</td>
+                <td className="text-right font-mono tabular-nums text-slate-800">98.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-800">58.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-400">-</td>
+                <td className="text-right font-mono tabular-nums font-bold text-slate-900">156.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-600">160.000.000 ₫</td>
+                <td className="text-center"><span className="badge badge-success">97.5% (Trong Hạn Mức)</span></td>
+              </tr>
+              <tr>
+                <td className="text-left font-mono font-medium text-slate-800">DA-LANDMARK</td>
+                <td className="text-left font-medium text-slate-900">Tổ Hợp Tháp Văn Phòng Landmark Hải Minh</td>
+                <td className="text-left text-slate-700">Hoàng Văn Long (Chỉ huy trưởng)</td>
+                <td className="text-center font-medium">6 kỹ sư &amp; giám sát</td>
+                <td className="text-right font-mono tabular-nums text-slate-800">77.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-800">52.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-400">-</td>
+                <td className="text-right font-mono tabular-nums font-bold text-slate-900">129.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-600">135.000.000 ₫</td>
+                <td className="text-center"><span className="badge badge-success">95.6% (Trong Hạn Mức)</span></td>
+              </tr>
+              <tr>
+                <td className="text-left font-mono font-medium text-slate-800">HQ-OFFICE</td>
+                <td className="text-left font-medium text-slate-900">Khối Văn Phòng Trụ Sở Hải Minh Tower</td>
+                <td className="text-left text-slate-700">Khối Quản Trị &amp; Điều Hành</td>
+                <td className="text-center font-medium">5 chuyên viên HQ</td>
+                <td className="text-right font-mono tabular-nums text-slate-400">-</td>
+                <td className="text-right font-mono tabular-nums text-slate-400">-</td>
+                <td className="text-right font-mono tabular-nums text-slate-800">60.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums font-bold text-slate-900">60.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-600">60.000.000 ₫</td>
+                <td className="text-center"><span className="badge badge-info">100.0% (Định Mức)</span></td>
+              </tr>
+              <tr style={{ backgroundColor: '#f1f5f9', fontWeight: 700 }}>
+                <td colSpan={4} className="text-left text-slate-900">TỔNG CỘNG TOÀN DOANH NGHIỆP:</td>
+                <td className="text-right font-mono tabular-nums text-slate-900">175.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-900">110.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-900">60.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums font-bold text-blue-800">345.000.000 ₫</td>
+                <td className="text-right font-mono tabular-nums text-slate-700">355.000.000 ₫</td>
+                <td className="text-center"><span className="badge badge-success">Tiết Kiệm 10.000.000 ₫</span></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
