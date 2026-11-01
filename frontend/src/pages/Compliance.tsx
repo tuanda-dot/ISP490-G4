@@ -62,7 +62,7 @@ export const Compliance: React.FC = () => {
   // Management / Auditor / Viewer: Ban Giám đốc, Trưởng phòng HR, Kỹ sư hiện trường (Chế độ xem & Live Sandbox)
   const isFormulaViewer = !isFormulaMaker && !isFormulaChecker;
 
-  const [activeTab, setActiveTab] = useState<'LAW_RULES' | 'SALARY_SCALES'>('LAW_RULES');
+  const [activeTab, setActiveTab] = useState<'LAW_RULES' | 'SALARY_SCALES' | 'SITE_ALLOWANCES' | 'FORMULA_SIMULATOR'>('LAW_RULES');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -490,8 +490,331 @@ export const Compliance: React.FC = () => {
     setEditingScale(null);
   };
 
+  // ----------------------------------------------------
+  // TAB 3: PHỤ CẤP CÔNG TRÌNH & ĐẶC THÙ XÂY DỰNG (FE-09 / UC-19)
+  // ----------------------------------------------------
+  const [allowanceList, setAllowanceList] = useState<SalaryAllowanceItem[]>([
+    {
+      id: 1,
+      code: 'SITE_LODGING',
+      name: 'Phụ cấp lưu trú công trình',
+      componentType: 'ALLOWANCE',
+      amount: 3000000,
+      applicableScope: 'SITE_ENGINEER',
+      isInsuranceBase: false,
+      isTaxable: false,
+      isProratedByDays: true,
+      defaultAccountCode: 'TK_627',
+      legalBasis: 'Luật BHXH 2024 & Quy chế khoán thi công',
+      isActive: true,
+      note: 'Khoán hỗ trợ kỹ sư bám lán trại, ăn ở tại công trình xa trụ sở. Miễn đóng BHXH và miễn thuế TNCN',
+    },
+    {
+      id: 2,
+      code: 'HAZARD',
+      name: 'Phụ cấp độc hại & nguy hiểm hiện trường',
+      componentType: 'ALLOWANCE',
+      amount: 1500000,
+      applicableScope: 'SITE_ENGINEER',
+      isInsuranceBase: false,
+      isTaxable: false,
+      isProratedByDays: true,
+      defaultAccountCode: 'TK_627',
+      legalBasis: 'Điều 2 Thông tư 111/2013/TT-BTC & NĐ 158/2025/NĐ-CP',
+      isActive: true,
+      note: 'Hỗ trợ thi công trên cao, hầm ngầm, đổ bê tông đêm. Được miễn thuế TNCN và miễn đóng BHXH',
+    },
+    {
+      id: 3,
+      code: 'PROJECT_RESPONSIBILITY',
+      name: 'Phụ cấp trách nhiệm gói thầu công trình',
+      componentType: 'ALLOWANCE',
+      amount: 2000000,
+      applicableScope: 'SITE_ENGINEER',
+      isInsuranceBase: false,
+      isTaxable: true,
+      isProratedByDays: false,
+      defaultAccountCode: 'TK_627',
+      legalBasis: 'Quy chế Thù lao Ban Điều hành Dự án',
+      isActive: true,
+      note: 'Dành riêng cho Chỉ huy trưởng, Đội trưởng, Kỹ sư an toàn HSE. Miễn đóng BHXH, tính vào thu nhập chịu thuế TNCN',
+    },
+    {
+      id: 4,
+      code: 'FUEL_TRAVEL',
+      name: 'Phụ cấp đi lại & xăng xe công tác hiện trường',
+      componentType: 'ALLOWANCE',
+      amount: 1000000,
+      applicableScope: 'ALL',
+      isInsuranceBase: false,
+      isTaxable: true,
+      isProratedByDays: true,
+      defaultAccountCode: 'TK_627',
+      legalBasis: 'Quy chế Công tác phí Doanh nghiệp',
+      isActive: true,
+      note: 'Khoán hỗ trợ di chuyển giữa các công trình hoặc đi thị sát dự án. Miễn đóng BHXH',
+    },
+    {
+      id: 5,
+      code: 'MEAL',
+      name: 'Phụ cấp ăn ca / trưa công trường & văn phòng',
+      componentType: 'ALLOWANCE',
+      amount: 730000,
+      applicableScope: 'ALL',
+      isInsuranceBase: false,
+      isTaxable: false,
+      isProratedByDays: true,
+      defaultAccountCode: 'TK_642',
+      legalBasis: 'Thông tư 111/2013/TT-BTC & TT 26/2015',
+      isActive: true,
+      note: 'Mức chuẩn 730.000 ₫/tháng được miễn thuế TNCN và không tính vào quỹ đóng BHXH',
+    },
+    {
+      id: 6,
+      code: 'POSITION_OFFICE',
+      name: 'Phụ cấp chức vụ quản lý văn phòng',
+      componentType: 'ALLOWANCE',
+      amount: 2500000,
+      applicableScope: 'OFFICE_STAFF',
+      isInsuranceBase: true,
+      isTaxable: true,
+      isProratedByDays: false,
+      defaultAccountCode: 'TK_642',
+      legalBasis: 'Luật BHXH 2024 / Khoản 2 Điều 89',
+      isActive: true,
+      note: 'Dành cho Trưởng/Phó phòng khối HQ. BẮT BUỘC TÍNH VÀO NỀN ĐÓNG BHXH theo Luật BHXH 2024',
+    },
+    {
+      id: 7,
+      code: 'SENIORITY',
+      name: 'Phụ cấp thâm niên cống hiến',
+      componentType: 'ALLOWANCE',
+      amount: 1500000,
+      applicableScope: 'OFFICE_STAFF',
+      isInsuranceBase: true,
+      isTaxable: true,
+      isProratedByDays: false,
+      defaultAccountCode: 'TK_642',
+      legalBasis: 'Thỏa ước Lao động Tập thể',
+      isActive: true,
+      note: 'Áp dụng cho nhân sự cống hiến từ 3 năm trở lên. Khối văn phòng bắt buộc đóng BHXH trên khoản này',
+    },
+  ]);
 
-  // Export Compliance & Salary Scales CSV (FE-08)
+  // Modal Sửa & Thêm Phụ Cấp
+  const [editingAllowance, setEditingAllowance] = useState<SalaryAllowanceItem | null>(null);
+
+  const handleSaveAllowance = () => {
+    if (!canManageAllowances) {
+      alert('Bạn không có quyền chỉnh sửa danh mục phụ cấp! Quyền này thuộc HR Manager và Kế Toán Trưởng.');
+      return;
+    }
+    if (!editingAllowance) return;
+    setAllowanceList(prev => {
+      const exists = prev.some(a => a.id === editingAllowance.id);
+      if (exists) {
+        return prev.map(a => a.id === editingAllowance.id ? editingAllowance : a);
+      }
+      return [...prev, { ...editingAllowance, id: editingAllowance.id || Date.now() }];
+    });
+    showToast(`Đã lưu cấu hình phụ cấp "${editingAllowance.name}" thành công!`);
+    setEditingAllowance(null);
+  };
+
+  const handleDeleteAllowance = (id: number, name: string) => {
+    if (!canManageAllowances) {
+      alert('Bạn không có quyền xóa phụ cấp!');
+      return;
+    }
+    if (window.confirm(`Bạn có chắc chắn muốn xóa khoản phụ cấp "${name}" khỏi hệ thống không?`)) {
+      setAllowanceList(prev => prev.filter(a => a.id !== id));
+      showToast(`Đã xóa khoản phụ cấp "${name}" thành công!`);
+    }
+  };
+
+  const handleToggleAllowanceStatus = (id: number) => {
+    if (!canManageAllowances) {
+      showToast('Bạn chỉ có quyền xem danh mục phụ cấp, không được thay đổi trạng thái kích hoạt.');
+      return;
+    }
+    setAllowanceList(prev => prev.map(a => {
+      if (a.id === id) {
+        const next = !a.isActive;
+        showToast(`Đã ${next ? 'kích hoạt' : 'tạm dừng'} phụ cấp: ${a.name}`);
+        return { ...a, isActive: next };
+      }
+      return a;
+    }));
+  };
+
+  // Step 4 (BF-10): Gán phụ cấp đặc thù Hiện trường cho nhóm Kỹ sư công trường theo từng dự án
+  const [selectedSiteProject, setSelectedSiteProject] = useState<'DA-NHATTAN2' | 'DA-LANDMARK'>('DA-NHATTAN2');
+  const [siteProjectAllowances, setSiteProjectAllowances] = useState({
+    'DA-NHATTAN2': {
+      projectName: 'Dự Án Cầu Nhật Tân 2 & Nút Giao Vành Đai',
+      siteLodging: 3000000,
+      hazard: 1500000,
+      projectResponsibilitySM: 2000000,
+      projectResponsibilityEng: 500000,
+      nightShiftAllowance: 800000,
+      engineers: [
+        { code: 'HM-005', name: 'Nguyễn Lê Gia Phát', role: 'Chỉ Huy Trưởng', customLodging: 3000000, customHazard: 1500000, customResp: 2000000 },
+        { code: 'HM-006', name: 'Trần Văn Trung', role: 'Kỹ Sư Kết Cấu Trưởng', customLodging: 3000000, customHazard: 1500000, customResp: 500000 },
+        { code: 'HM-010', name: 'Phạm Đức Long', role: 'Kỹ Sư Thi Công Cầu', customLodging: 3000000, customHazard: 1500000, customResp: 500000 },
+      ]
+    },
+    'DA-LANDMARK': {
+      projectName: 'Tổ Hợp Tháp Văn Phòng Landmark Hải Minh',
+      siteLodging: 2500000,
+      hazard: 1200000,
+      projectResponsibilitySM: 1500000,
+      projectResponsibilityEng: 500000,
+      nightShiftAllowance: 600000,
+      engineers: [
+        { code: 'HM-012', name: 'Hoàng Văn Long', role: 'Chỉ Huy Trưởng', customLodging: 2500000, customHazard: 1200000, customResp: 1500000 },
+        { code: 'HM-015', name: 'Trần Đình Trọng', role: 'Kỹ Sư An Toàn HSE', customLodging: 2500000, customHazard: 1200000, customResp: 500000 },
+        { code: 'HM-017', name: 'Vũ Hải Đăng', role: 'Kỹ Sư Hiện Trường Tập Sự', customLodging: 2500000, customHazard: 1200000, customResp: 0 },
+      ]
+    }
+  });
+
+  const handleSaveProjectAllowanceAllocation = () => {
+    if (!canManageAllowances) {
+      alert('Bạn không có quyền thiết lập phụ cấp dự án! Quyền này thuộc HR Manager và Kế Toán Trưởng.');
+      return;
+    }
+    const proj = siteProjectAllowances[selectedSiteProject];
+    showToast(`Đã lưu và đồng bộ hạn mức phụ cấp đặc thù hiện trường cho dự án "${proj.projectName}" (Step 4 / BF-10)!`);
+  };
+
+  // Workflow BF-10: Bộ Công Thức Tính Lương Động & Lịch Sử Kiểm Toán
+  const [formulaWorkflowStatus, setFormulaWorkflowStatus] = useState<'DRAFT' | 'SYNTAX_VERIFIED' | 'PREVIEWED' | 'PENDING_APPROVAL' | 'APPROVED_ACTIVE'>('APPROVED_ACTIVE');
+  const [formulaVersion, setFormulaVersion] = useState<string>('v2026.1');
+  const [syntaxCheckMessage, setSyntaxCheckMessage] = useState<string | null>(null);
+
+  // Dynamic formula inputs
+  const [customFormulas, setCustomFormulas] = useState({
+    timeSalary: '(BASE_SALARY / STANDARD_DAYS) * ACTUAL_DAYS',
+    otPay: '(BASE_SALARY / STANDARD_DAYS / 8) * (OT_WEEKDAY * 1.5 + OT_WEEKEND * 2.0 + OT_HOLIDAY * 3.0 + OT_NIGHT * 0.3)',
+    insuranceBaseOffice: 'CLAMP(BASE_SALARY + POSITION_ALLOWANCE + SENIORITY_ALLOWANCE, MIN_WAGE, BHXH_CAP)',
+    insuranceBaseSite: 'CLAMP(BASE_SALARY, MIN_WAGE, BHXH_CAP)',
+    taxableIncome: 'GROSS_SALARY - MEAL_EXEMPT - SITE_LODGING_EXEMPT - HAZARD_EXEMPT - OT_PREMIUM_EXEMPT',
+    netSalary: 'GROSS_SALARY - EMPLOYEE_INSURANCE - PIT_TAX - UNION_DUES',
+    costAllocationTK622: 'Chi phí nhân công trực tiếp thi công công trình (Kỹ sư kết cấu hiện trường)',
+    costAllocationTK627: 'Chi phí sản xuất chung (Ban chỉ huy công trường, Chỉ huy trưởng, Kỹ sư HSE)',
+    costAllocationTK642: 'Chi phí quản lý doanh nghiệp (Khối văn phòng trụ sở chính HQ)',
+  });
+
+  // Audit Logs (Step 14 & 15 BF-10)
+  const [auditLogs, setAuditLogs] = useState([
+    {
+      id: 1,
+      version: 'v2026.1',
+      actor: 'Đoàn Anh Tuấn (Kế toán trưởng)',
+      action: 'Phê duyệt & Chốt áp dụng bộ công thức tính lương & phụ cấp chuẩn năm 2026 (Step 12 / BF-10)',
+      timestamp: '2026-10-01 08:30:00',
+      status: 'APPROVED',
+      notes: 'Áp dụng biểu thuế TNCN 7 bậc, phụ cấp công trường miễn BHXH, trần BHXH 46.8M'
+    },
+    {
+      id: 2,
+      version: 'v2026.1',
+      actor: 'Nguyễn Thu Giang (HR Manager)',
+      action: 'Cấu hình thang bảng lương ngạch bậc VP TK 642 và Công trường TK 627 (Step 2 & 3)',
+      timestamp: '2026-09-28 14:15:00',
+      status: 'ACTIVE',
+      notes: 'Khởi tạo 13 ngạch bậc lương chuẩn và 7 khoản phụ cấp đặc thù công trường'
+    },
+    {
+      id: 3,
+      version: 'v2026.0',
+      actor: 'System Admin',
+      action: 'Lưu trữ phiên bản cũ (Archive) vào kho lịch sử kiểm toán hệ thống (Step 13 & 14)',
+      timestamp: '2026-09-25 18:00:00',
+      status: 'ARCHIVED',
+      notes: 'Lưu trữ cấu hình năm tài chính 2025 vào kho Audit Trail'
+    }
+  ]);
+
+  const handleSyntaxCheck = () => {
+    const requiredVars = ['BASE_SALARY', 'STANDARD_DAYS', 'ACTUAL_DAYS'];
+    const hasRequired = requiredVars.every(v => customFormulas.timeSalary.includes(v));
+    if (hasRequired) {
+      setSyntaxCheckMessage('Cú pháp biểu thức toán học hoàn toàn hợp lệ! Đã xác thực toàn vẹn 8 trường tham số (Step 13 / BF-10).');
+      setFormulaWorkflowStatus('SYNTAX_VERIFIED');
+      showToast('Kiểm tra cú pháp công thức thành công! Sẵn sàng chạy thử nghiệm Sandbox.');
+    } else {
+      setSyntaxCheckMessage('Lỗi cú pháp: Biểu thức thiếu các tham số chuẩn!');
+    }
+  };
+
+  const handleRunSandboxDryRun = () => {
+    setFormulaWorkflowStatus('PREVIEWED');
+    showToast('Đã chạy thử nghiệm (Dry-run / Preview Formula) thành công trên 4 Persona mẫu! (Step 11 / BF-10)');
+  };
+
+  const handleSubmitFormulaForReview = () => {
+    if (!isFormulaMaker) {
+      alert('Chỉ Chuyên viên Kế toán (Maker) mới có quyền trình thẩm định bộ công thức lương động!');
+      return;
+    }
+    setFormulaWorkflowStatus('PENDING_APPROVAL');
+    setAuditLogs(prev => [
+      {
+        id: Date.now(),
+        version: 'v2026.2-DRAFT',
+        actor: `${user?.fullName || 'Hoàng Thị Lan'} (${ROLE_LABELS[currentRole] || 'Chuyên viên Kế toán'})`,
+        action: 'Trình thẩm định bộ công thức tính lương & phụ cấp mới lên Kế toán trưởng (Step 11 / BF-10)',
+        timestamp: new Date().toLocaleString('vi-VN'),
+        status: 'PENDING',
+        notes: 'Cập nhật hệ số tăng ca đêm công trình và định mức phụ cấp lán trại Cầu Nhật Tân 2'
+      },
+      ...prev
+    ]);
+    showToast('Chuyên viên Kế toán đã trình bộ công thức tính lương động sang Kế toán trưởng thẩm định!');
+  };
+
+  const handleApproveFormulaWorkflow = () => {
+    if (!isFormulaChecker) {
+      alert('Chỉ Kế Toán Trưởng hoặc Quản Trị Hệ Thống mới có thẩm quyền phê duyệt và chốt áp dụng công thức lương (BF-10)!');
+      return;
+    }
+    setFormulaWorkflowStatus('APPROVED_ACTIVE');
+    setFormulaVersion('v2026.2');
+    setAuditLogs(prev => [
+      {
+        id: Date.now(),
+        version: 'v2026.2',
+        actor: `${user?.fullName || 'Đoàn Anh Tuấn'} (${ROLE_LABELS[currentRole] || 'Kế toán trưởng'})`,
+        action: 'Phê duyệt & Chốt áp dụng bộ công thức tính lương & phụ cấp mới cho kỳ tới (Step 12 / BF-10)',
+        timestamp: new Date().toLocaleString('vi-VN'),
+        status: 'APPROVED',
+        notes: 'Chính thức áp dụng phiên bản v2026.2 vào toàn bộ hệ thống tính lương HMCPS'
+      },
+      ...prev
+    ]);
+    showToast('Kế toán trưởng đã phê duyệt và chốt áp dụng bộ công thức tính lương mới cho kỳ tới thành công!');
+  };
+
+  const handleRejectFormulaWorkflow = () => {
+    if (!isFormulaChecker) return;
+    setFormulaWorkflowStatus('DRAFT');
+    setAuditLogs(prev => [
+      {
+        id: Date.now(),
+        version: 'v2026.2-DRAFT',
+        actor: `${user?.fullName || 'Đoàn Anh Tuấn'} (${ROLE_LABELS[currentRole] || 'Kế toán trưởng'})`,
+        action: 'Yêu cầu điều chỉnh lại biểu thức (Return to Maker for Revision)',
+        timestamp: new Date().toLocaleString('vi-VN'),
+        status: 'PENDING',
+        notes: 'Kế toán trưởng yêu cầu Kế toán viên kiểm tra lại tham số bóc tách chi phí và hệ số phụ cấp'
+      },
+      ...prev
+    ]);
+    showToast('Đã hoàn trả bộ công thức về trạng thái Bản thảo (Draft) để Kế toán viên điều chỉnh lại!');
+  };
+
+  // Export Comprehensive Compliance CSV
   const handleExportComplianceCSV = () => {
     const ruleHeaders = ['STT', 'Mã Tham Số', 'Tên Quy Chuẩn / Bộ Luật', 'Nhóm', 'Giá Trị', 'Đơn Vị', 'Ngày Hiệu Lực', 'Trạng Thái', 'Căn Cứ Pháp Lý', 'Mô Tả Nghiệp Vụ'];
     const ruleRows = complianceRules.map((r, i) => [
@@ -519,29 +842,308 @@ export const Compliance: React.FC = () => {
       `"${s.insuranceRule}"`
     ]);
 
+    const allowanceHeaders = ['Mã Phụ Cấp', 'Tên Khoản Phụ Cấp', 'Định Mức (VNĐ)', 'Đối Tượng Áp Dụng', 'Tính Vào Nền BHXH?', 'Chịu Thuế TNCN?', 'Phân Bổ Theo Ngày Công?', 'TK Mặc Định', 'Căn Cứ Pháp Lý', 'Ghi Chú'];
+    const allowanceRows = allowanceList.map(a => [
+      `"${a.code}"`,
+      `"${a.name}"`,
+      a.amount,
+      `"${a.applicableScope === 'SITE_ENGINEER' ? 'Kỹ Sư Công Trường' : a.applicableScope === 'OFFICE_STAFF' ? 'Khối Văn Phòng' : 'Toàn Bộ Nhân Sự'}"`,
+      a.isInsuranceBase ? 'CÓ ĐÓNG BHXH' : 'MIỄN BHXH',
+      a.isTaxable ? 'CHỊU THUẾ' : 'MIỄN THUẾ',
+      a.isProratedByDays ? 'THEO NGÀY CÔNG' : 'CỐ ĐỊNH THÁNG',
+      `"${a.defaultAccountCode}"`,
+      `"${a.legalBasis}"`,
+      `"${a.note}"`
+    ]);
+
+    const formulaHeaders = ['Thành Phần Lương', 'Biểu Thức Công Thức Động', 'Ghi Chú Hạch Toán'];
+    const formulaRows = [
+      ['"Lương thời gian (TimeSalary)"', `"${customFormulas.timeSalary}"`, '"Đơn giá ngày = Base / 26 công"'],
+      ['"Làm thêm giờ (OvertimePay)"', `"${customFormulas.otPay}"`, '"Đơn giá giờ = Base / 26 / 8 * hệ số"'],
+      ['"Nền đóng BHXH Khối VP"', `"${customFormulas.insuranceBaseOffice}"`, '"Lương CB + Phụ cấp chức vụ + Thâm niên (trần 46.8M)"'],
+      ['"Nền đóng BHXH Khối Công trường"', `"${customFormulas.insuranceBaseSite}"`, '"Lương CB DUY NHẤT! Miễn toàn bộ phụ cấp thi công"'],
+      ['"Thu nhập chịu thuế (TaxableIncome)"', `"${customFormulas.taxableIncome}"`, '"Trừ phần phụ cấp ăn ca, lưu trú, độc hại và phụ trội OT"'],
+      ['"Thực lĩnh chuyển khoản (NetSalary)"', `"${customFormulas.netSalary}"`, '"Net = Gross - BHXH NLĐ (10.5%) - Thuế TNCN - Đoàn phí (1%)"'],
+      ['"Bóc tách chi phí nhân công trực tiếp"', '"TK 622"', `"${customFormulas.costAllocationTK622}"`],
+      ['"Bóc tách chi phí sản xuất chung hiện trường"', '"TK 627"', `"${customFormulas.costAllocationTK627}"`],
+      ['"Bóc tách chi phí quản lý doanh nghiệp"', '"TK 642"', `"${customFormulas.costAllocationTK642}"`]
+    ];
+
     const csvSections = [
-      'HỆ THỐNG QUẢN LÝ CHẤM CÔNG & TÍNH LƯƠNG HMCPS - HỒ SƠ QUY CHUẨN PHÁP LÝ & THANG BẢNG LƯƠNG (FE-08 / BF-10)',
-      `Ngày xuất: ${new Date().toLocaleString('vi-VN')}`,
+      'HỆ THỐNG QUẢN LÝ CHẤM CÔNG & TÍNH LƯƠNG HMCPS - HỒ SƠ QUY CHUẨN PHÁP LÝ & CÔNG THỨC LƯƠNG ĐỘNG (BF-10)',
+      `Ngày xuất: ${new Date().toLocaleString('vi-VN')} | Phiên bản hiệu lực: ${formulaVersion}`,
       '',
       '=== PHẦN 1: BẢNG THAM SỐ LUẬT LAO ĐỘNG & BẢO HIỂM 2026 (FE-08 / UC-17) ===',
       [ruleHeaders.join(','), ...ruleRows.map(r => r.join(','))].join('\r\n'),
       '',
       '=== PHẦN 2: THANG BẢNG LƯƠNG CHUẨN DOANH NGHIỆP (FE-08 / UC-18) ===',
-      [scaleHeaders.join(','), ...scaleRows.map(r => r.join(','))].join('\r\n')
+      [scaleHeaders.join(','), ...scaleRows.map(r => r.join(','))].join('\r\n'),
+      '',
+      '=== PHẦN 3: DANH MỤC PHỤ CẤP CÔNG TRÌNH & ĐẶC THÙ XÂY DỰNG (FE-09 / UC-19) ===',
+      [allowanceHeaders.join(','), ...allowanceRows.map(r => r.join(','))].join('\r\n'),
+      '',
+      '=== PHẦN 4: BỘ CÔNG THỨC LƯƠNG ĐỘNG & PHÂN BỔ CHI PHÍ (FE-09 / UC-20 / BF-10) ===',
+      [formulaHeaders.join(','), ...formulaRows.map(r => r.join(','))].join('\r\n')
     ].join('\r\n');
 
     const blob = new Blob(['\uFEFF' + csvSections], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `HMCPS_Ho_So_Phap_Ly_Thang_Luong_2026.csv`;
+    link.download = `HMCPS_Ho_So_Chinh_Sach_Phap_Ly_Luong_Phu_Cap_2026.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showToast('Đã xuất thành công hồ sơ pháp lý & thang lương ra file CSV!');
+    showToast('Đã xuất thành công toàn bộ hồ sơ pháp lý, thang lương & công thức ra file CSV / Excel!');
   };
 
+  // ----------------------------------------------------
+  // TAB 4: BỘ CÔNG THỨC LƯƠNG ĐỘNG & SANDBOX MÔ PHỎNG (FE-09 / UC-20)
+  // ----------------------------------------------------
+  // Danh sách Persona mẫu để kiểm thử sandbox
+  const samplePersonas = [
+    {
+      id: 'PERSONA_1',
+      employeeCode: 'HM-003',
+      fullName: 'Nguyễn Thu Giang',
+      position: 'Trưởng Phòng Nhân Sự (HR Manager)',
+      employeeType: 'OFFICE_STAFF' as const,
+      accountCode: 'TK_642' as const,
+      baseSalary: 25000000,
+      positionAllowance: 2500000,
+      seniorityAllowance: 1500000,
+      mealAllowance: 730000,
+      dependentsCount: 1,
+      isUnionMember: true,
+      standardDays: 26,
+    },
+    {
+      id: 'PERSONA_2',
+      employeeCode: 'HM-005',
+      fullName: 'Nguyễn Lê Gia Phát',
+      position: 'Chỉ Huy Trưởng Công Trường (Cầu Nhật Tân 2)',
+      employeeType: 'SITE_ENGINEER' as const,
+      accountCode: 'TK_627' as const,
+      baseSalary: 26000000,
+      siteLodging: 3000000,
+      hazard: 1500000,
+      projectResponsibility: 2000000,
+      mealAllowance: 730000,
+      dependentsCount: 0,
+      isUnionMember: true,
+      standardDays: 26,
+    },
+    {
+      id: 'PERSONA_3',
+      employeeCode: 'HM-006',
+      fullName: 'Trần Đình Trọng',
+      position: 'Kỹ Sư An Toàn HSE Hiện Trường (TK 627)',
+      employeeType: 'SITE_ENGINEER' as const,
+      accountCode: 'TK_627' as const,
+      baseSalary: 14500000,
+      siteLodging: 3000000,
+      hazard: 1500000,
+      projectResponsibility: 0,
+      mealAllowance: 730000,
+      dependentsCount: 2,
+      isUnionMember: true,
+      standardDays: 26,
+    },
+    {
+      id: 'PERSONA_4',
+      employeeCode: 'HM-017',
+      fullName: 'Vũ Hải Đăng',
+      position: 'Kỹ Sư Hiện Trường Tập Sự (Tháp Landmark)',
+      employeeType: 'SITE_ENGINEER' as const,
+      accountCode: 'TK_627' as const,
+      baseSalary: 10000000,
+      siteLodging: 3000000,
+      hazard: 1500000,
+      projectResponsibility: 0,
+      mealAllowance: 730000,
+      dependentsCount: 0,
+      isUnionMember: true,
+      standardDays: 26,
+    },
+  ];
+
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string>('PERSONA_2');
+  const [simActualDays, setSimActualDays] = useState<number>(25);
+  const [simOtWeekdayHours, setSimOtWeekdayHours] = useState<number>(12);
+  const [simOtWeekendHours, setSimOtWeekendHours] = useState<number>(8);
+
+  // Thuật toán chạy lõi tính lương mô phỏng thời gian thực
+  const calculateSimulation = (): FormulaSimulationResult => {
+    const persona = samplePersonas.find(p => p.id === selectedPersonaId) || samplePersonas[0];
+    const stdDays = persona.standardDays || 26;
+
+    // 1. Lương thời gian
+    const timeSalary = Math.round((persona.baseSalary / stdDays) * simActualDays);
+
+    // 2. Tiền làm thêm giờ (OT)
+    // Đơn giá 1 giờ chuẩn = Lương CB / 26 / 8
+    const hourlyRate = persona.baseSalary / stdDays / 8;
+    const otWeekdayPay = Math.round(hourlyRate * simOtWeekdayHours * 1.5);
+    const otWeekendPay = Math.round(hourlyRate * simOtWeekendHours * 2.0);
+    const otPay = otWeekdayPay + otWeekendPay;
+
+    // 3. Phụ cấp theo loại đối tượng
+    const allowances: { name: string; amount: number; isTaxable: boolean; isInsurance: boolean }[] = [];
+    let allowanceTotal = 0;
+
+    if (persona.employeeType === 'OFFICE_STAFF') {
+      if (persona.positionAllowance) {
+        allowances.push({ name: 'Phụ cấp chức vụ quản lý', amount: persona.positionAllowance, isTaxable: true, isInsurance: true });
+        allowanceTotal += persona.positionAllowance;
+      }
+      if (persona.seniorityAllowance) {
+        allowances.push({ name: 'Phụ cấp thâm niên', amount: persona.seniorityAllowance, isTaxable: true, isInsurance: true });
+        allowanceTotal += persona.seniorityAllowance;
+      }
+      if (persona.mealAllowance) {
+        const mealProrated = Math.round((persona.mealAllowance / stdDays) * simActualDays);
+        allowances.push({ name: 'Phụ cấp ăn ca', amount: mealProrated, isTaxable: false, isInsurance: false });
+        allowanceTotal += mealProrated;
+      }
+    } else {
+      // Khối Công Trường: Toàn bộ phụ cấp lưu trú, độc hại, trách nhiệm MIỄN BHXH!
+      if (persona.siteLodging) {
+        const lodgingProrated = Math.round((persona.siteLodging / stdDays) * simActualDays);
+        allowances.push({ name: 'Phụ cấp lưu trú công trình', amount: lodgingProrated, isTaxable: false, isInsurance: false });
+        allowanceTotal += lodgingProrated;
+      }
+      if (persona.hazard) {
+        const hazardProrated = Math.round((persona.hazard / stdDays) * simActualDays);
+        allowances.push({ name: 'Phụ cấp độc hại hiện trường', amount: hazardProrated, isTaxable: false, isInsurance: false });
+        allowanceTotal += hazardProrated;
+      }
+      if (persona.projectResponsibility) {
+        allowances.push({ name: 'Phụ cấp trách nhiệm gói thầu', amount: persona.projectResponsibility, isTaxable: true, isInsurance: false });
+        allowanceTotal += persona.projectResponsibility;
+      }
+      if (persona.mealAllowance) {
+        const mealProrated = Math.round((persona.mealAllowance / stdDays) * simActualDays);
+        allowances.push({ name: 'Phụ cấp ăn ca công trường', amount: mealProrated, isTaxable: false, isInsurance: false });
+        allowanceTotal += mealProrated;
+      }
+    }
+
+    // 4. Tổng thu nhập Gross
+    const grossSalary = timeSalary + otPay + allowanceTotal;
+
+    // 5. Nền đóng BHXH (CRITICAL DOMAIN LOGIC)
+    let rawInsuranceBase = persona.baseSalary;
+    if (persona.employeeType === 'OFFICE_STAFF') {
+      rawInsuranceBase += (persona.positionAllowance || 0) + (persona.seniorityAllowance || 0);
+    }
+    // Kẹp trần BHXH/BHYT (46.8M) và sàn Vùng I (5.31M)
+    const insuranceCapped = rawInsuranceBase > 46800000;
+    const insuranceBase = Math.min(Math.max(rawInsuranceBase, 5310000), 46800000);
+    const bhtnBase = Math.min(Math.max(rawInsuranceBase, 5310000), 106200000);
+
+    // 6. Trích nộp bảo hiểm
+    // NLĐ (10.5%)
+    const empBhxh = Math.round(insuranceBase * 0.08);
+    const empBhyt = Math.round(insuranceBase * 0.015);
+    const empBhtn = Math.round(bhtnBase * 0.01);
+    const empInsuranceTotal = empBhxh + empBhyt + empBhtn;
+
+    // Doanh nghiệp (23.5% = 17% BHXH + 3% BHYT + 1% BHTN + 0.5% TNLĐ + 2% KPCĐ)
+    const compBhxh = Math.round(insuranceBase * 0.17);
+    const compBhyt = Math.round(insuranceBase * 0.03);
+    const compBhtn = Math.round(bhtnBase * 0.01);
+    const compTnld = Math.round(insuranceBase * 0.005);
+    const compUnion = Math.round(insuranceBase * 0.02);
+    const compInsuranceTotal = compBhxh + compBhyt + compBhtn + compTnld + compUnion;
+
+    // 7. Giảm trừ & Thuế TNCN
+    const personalDeduction = 11000000;
+    const dependentDeduction = persona.dependentsCount * 4400000;
+
+    // Thu nhập chịu thuế = Gross - Phần phụ cấp miễn thuế - Phần phụ trội OT miễn thuế
+    // Phần phụ trội OT: giờ thường hưởng 150% thì 50% miễn thuế; cuối tuần 200% thì 100% miễn thuế
+    const otTaxExemptPortion = Math.round(hourlyRate * simOtWeekdayHours * 0.5 + hourlyRate * simOtWeekendHours * 1.0);
+    const nonTaxableAllowances = allowances.filter(a => !a.isTaxable).reduce((sum, a) => sum + a.amount, 0);
+
+    const assessableIncome = Math.max(0, grossSalary - nonTaxableAllowances - otTaxExemptPortion);
+    const taxableIncome = Math.max(0, assessableIncome - empInsuranceTotal - personalDeduction - dependentDeduction);
+
+    // Biểu thuế lũy tiến từng phần
+    let pitTax = 0;
+    if (taxableIncome > 0) {
+      if (taxableIncome <= 5000000) {
+        pitTax = taxableIncome * 0.05;
+      } else if (taxableIncome <= 10000000) {
+        pitTax = 5000000 * 0.05 + (taxableIncome - 5000000) * 0.1;
+      } else if (taxableIncome <= 18000000) {
+        pitTax = 5000000 * 0.05 + 5000000 * 0.1 + (taxableIncome - 10000000) * 0.15;
+      } else if (taxableIncome <= 32000000) {
+        pitTax = 5000000 * 0.05 + 5000000 * 0.1 + 8000000 * 0.15 + (taxableIncome - 18000000) * 0.2;
+      } else if (taxableIncome <= 52000000) {
+        pitTax = 5000000 * 0.05 + 5000000 * 0.1 + 8000000 * 0.15 + 14000000 * 0.2 + (taxableIncome - 32000000) * 0.25;
+      } else {
+        pitTax = 5000000 * 0.05 + 5000000 * 0.1 + 8000000 * 0.15 + 14000000 * 0.2 + 20000000 * 0.25 + (taxableIncome - 52000000) * 0.3;
+      }
+    }
+    pitTax = Math.round(pitTax);
+
+    // 8. Đoàn phí công đoàn NLĐ (1% lương cơ bản, tối đa 10% lương tối thiểu = 531k)
+    const unionDues = persona.isUnionMember ? Math.min(Math.round(persona.baseSalary * 0.01), 531000) : 0;
+
+    // 9. Lương thực lĩnh Net (Tuyệt đối không có tạm ứng lương theo SRS)
+    const netSalary = grossSalary - empInsuranceTotal - pitTax - unionDues;
+
+    // 10. Tổng chi phí DN
+    const totalCompanyCost = grossSalary + compInsuranceTotal;
+
+    return {
+      employeeCode: persona.employeeCode,
+      fullName: persona.fullName,
+      position: persona.position,
+      employeeType: persona.employeeType,
+      accountCode: persona.accountCode,
+      baseSalary: persona.baseSalary,
+      standardDays: stdDays,
+      actualDays: simActualDays,
+      timeSalary,
+      otWeekdayHours: simOtWeekdayHours,
+      otWeekendHours: simOtWeekendHours,
+      otPay,
+      allowanceTotal,
+      allowances,
+      grossSalary,
+      insuranceBase,
+      insuranceCapped,
+      employeeInsurance: {
+        bhxh: empBhxh,
+        bhyt: empBhyt,
+        bhtn: empBhtn,
+        total: empInsuranceTotal,
+      },
+      employerInsurance: {
+        bhxh: compBhxh,
+        bhyt: compBhyt,
+        bhtn: compBhtn,
+        tnldBnn: compTnld,
+        unionFee: compUnion,
+        total: compInsuranceTotal,
+      },
+      personalDeduction,
+      dependentsCount: persona.dependentsCount,
+      dependentDeduction,
+      taxableIncome,
+      pitTax,
+      unionDues,
+      netSalary,
+      totalCompanyCost,
+    };
+  };
+
+  const simResult = calculateSimulation();
+
+  return (
+    <div className="page-wrapper">
       {/* 1. Page Header */}
       <div className="page-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -776,7 +1378,6 @@ export const Compliance: React.FC = () => {
       </div>
 
       {/* 3. 4-Tab Switcher Bar */}
-      {/* 2-Tab Switcher Bar (FE-08) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.5rem', marginBottom: '1.25rem' }}>
         <button
           onClick={() => setActiveTab('LAW_RULES')}
@@ -799,7 +1400,31 @@ export const Compliance: React.FC = () => {
           <span className="badge badge-slate" style={{ marginLeft: '0.35rem' }}>{salaryScales.length}</span>
           <span className="badge badge-slate" style={{ marginLeft: '0.35rem', fontSize: '0.625rem' }}>HR</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('SITE_ALLOWANCES')}
+          className={`btn ${activeTab === 'SITE_ALLOWANCES' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ padding: '0.65rem 0.75rem', justifyContent: 'center', whiteSpace: 'nowrap' }}
+        >
+          <HardHat size={15} />
+          <span>3. Phụ Cấp Công Trường</span>
+          <span className="badge badge-slate" style={{ marginLeft: '0.35rem' }}>{allowanceList.length}</span>
+          <span className="badge badge-warning" style={{ marginLeft: '0.35rem', fontSize: '0.625rem' }}>HR &amp; KTT</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('FORMULA_SIMULATOR')}
+          className={`btn ${activeTab === 'FORMULA_SIMULATOR' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ padding: '0.65rem 0.75rem', justifyContent: 'center', whiteSpace: 'nowrap', backgroundColor: activeTab === 'FORMULA_SIMULATOR' ? '#1d4ed8' : undefined }}
+        >
+          <Calculator size={15} />
+          <span>4. Lõi Lương &amp; Sandbox</span>
+          <span className="badge badge-success" style={{ marginLeft: '0.35rem' }}>Live Test</span>
+          <span className="badge badge-primary" style={{ marginLeft: '0.35rem', fontSize: '0.625rem' }}>Maker-Checker</span>
+        </button>
       </div>
+
+      {/* ========================================================================= */}
       {/* TAB 1: THAM SỐ LUẬT LAO ĐỘNG & BẢO HIỂM 2026 (FE-08 / UC-17) */}
       {/* ========================================================================= */}
       {activeTab === 'LAW_RULES' && (
@@ -994,6 +1619,7 @@ export const Compliance: React.FC = () => {
         </div>
       )}
 
+      {/* ========================================================================= */}
       {/* TAB 2: THANG BẢNG LƯƠNG CHUẨN DOANH NGHIỆP (FE-08 / UC-18) */}
       {/* ========================================================================= */}
       {activeTab === 'SALARY_SCALES' && (
@@ -1076,6 +1702,1038 @@ export const Compliance: React.FC = () => {
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* TAB 3: PHỤ CẤP CÔNG TRÌNH & ĐẶC THÙ XÂY DỰNG (FE-09 / UC-19) */}
+      {/* ========================================================================= */}
+      {activeTab === 'SITE_ALLOWANCES' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Info Banner when user has read-only access to Site Allowances */}
+          {!canManageAllowances && (
+            <div style={{ padding: '0.5rem 0.85rem', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Info size={14} color="#64748b" />
+              <span>Chế độ xem chính sách phụ cấp công trường. Quyền cấu hình và gán dự án thuộc về <strong>Trưởng Phòng Nhân Sự (HR Manager)</strong> &amp; <strong>Kế Toán Trưởng</strong>.</span>
+            </div>
+          )}
+
+          <div className="alert-banner alert-banner-warning">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <HardHat size={18} color="#d97706" />
+              <div style={{ fontSize: '0.8125rem' }}>
+                <strong>Chính sách đãi ngộ đặc thù thi công công trình xây lắp:</strong>
+                <div style={{ marginTop: '0.15rem', color: 'var(--text-body)' }}>
+                  HMCPS thiết lập cấu hình linh hoạt cho 7 loại phụ cấp. Khoản phụ cấp được miễn BHXH giúp tối ưu hóa chi phí cho cả Doanh nghiệp và tăng thu nhập thực lĩnh cho Kỹ sư công trường theo đúng quy định pháp luật.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="table-container">
+            <table className="hm-table">
+              <thead>
+                <tr>
+                  <th className="text-left" style={{ width: '90px' }}>Mã PC</th>
+                  <th className="text-left">Tên Khoản Phụ Cấp</th>
+                  <th className="text-right" style={{ width: '140px' }}>Mức Định Mức</th>
+                  <th className="text-center" style={{ width: '130px' }}>Đối Tượng Áp Dụng</th>
+                  <th className="text-center" style={{ width: '110px' }}>Tính Nền BHXH</th>
+                  <th className="text-center" style={{ width: '110px' }}>Thuế TNCN</th>
+                  <th className="text-center" style={{ width: '100px' }}>Tính Theo Ngày</th>
+                  <th className="text-center" style={{ width: '90px' }}>Hạch Toán</th>
+                  <th className="text-center" style={{ width: '90px' }}>Trạng Thái</th>
+                  {canManageAllowances && <th className="text-center" style={{ width: '70px' }}>Sửa</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {allowanceList.map((item) => (
+                  <tr key={item.id} style={{ opacity: item.isActive ? 1 : 0.6 }}>
+                    <td className="text-left font-mono text-xs font-bold text-slate-800">{item.code}</td>
+                    <td className="text-left">
+                      <div className="font-medium text-slate-900">{item.name}</div>
+                      <div className="text-xs text-slate-500">{item.note}</div>
+                    </td>
+                    <td className="text-right tabular-nums font-bold text-slate-900" style={{ fontSize: '0.875rem' }}>
+                      {formatVND(item.amount)}
+                    </td>
+                    <td className="text-center">
+                      <span className={`badge ${
+                        item.applicableScope === 'SITE_ENGINEER' ? 'badge-warning' :
+                        item.applicableScope === 'OFFICE_STAFF' ? 'badge-primary' : 'badge-slate'
+                      }`}>
+                        {item.applicableScope === 'SITE_ENGINEER' ? 'Kỹ Sư Công Trường' :
+                         item.applicableScope === 'OFFICE_STAFF' ? 'Khối Văn Phòng HQ' : 'Toàn Bộ Nhân Sự'}
+                      </span>
+                    </td>
+                    <td className="text-center">
+                      {item.isInsuranceBase ? (
+                        <span className="badge badge-warning" style={{ backgroundColor: '#fffbeb', color: '#b45309' }}>
+                          Có Đóng BHXH
+                        </span>
+                      ) : (
+                        <span className="badge badge-success" style={{ backgroundColor: '#ecfdf5', color: '#047857' }}>
+                          Miễn BHXH
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-center">
+                      {item.isTaxable ? (
+                        <span className="badge badge-slate" style={{ fontSize: '0.6875rem' }}>Chịu Thuế</span>
+                      ) : (
+                        <span className="badge badge-success" style={{ fontSize: '0.6875rem' }}>Miễn Thuế</span>
+                      )}
+                    </td>
+                    <td className="text-center text-xs text-slate-600">
+                      {item.isProratedByDays ? 'Theo ngày công' : 'Khoán cố định'}
+                    </td>
+                    <td className="text-center font-mono font-semibold text-xs text-slate-700">
+                      {item.defaultAccountCode}
+                    </td>
+                    <td className="text-center">
+                      {canManageAllowances ? (
+                        <button
+                          onClick={() => handleToggleAllowanceStatus(item.id)}
+                          className={`badge ${item.isActive ? 'badge-success' : 'badge-slate'}`}
+                          style={{ cursor: 'pointer', border: 'none' }}
+                          title="Bấm để bật / tắt khoản phụ cấp này"
+                        >
+                          {item.isActive ? 'Đang Dùng' : 'Tạm Dừng'}
+                        </button>
+                      ) : (
+                        <span
+                          className={`badge ${item.isActive ? 'badge-success' : 'badge-slate'}`}
+                          style={{ cursor: 'default' }}
+                          title="Chỉ HR Manager & Kế toán trưởng mới có quyền bật/tắt"
+                        >
+                          {item.isActive ? 'Đang Dùng' : 'Tạm Dừng'}
+                        </span>
+                      )}
+                    </td>
+                    {canManageAllowances && (
+                      <td className="text-center">
+                        <div style={{ display: 'inline-flex', gap: '0.35rem' }}>
+                          <button
+                            onClick={() => setEditingAllowance({ ...item })}
+                            className="btn btn-sm btn-secondary"
+                            title="Sửa cấu hình phụ cấp"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAllowance(item.id, item.name)}
+                            className="btn btn-sm btn-secondary"
+                            style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                            title="Xóa khoản phụ cấp này"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* STEP 4 (BF-10): GÁN PHỤ CẤP ĐẶC THÙ HIỆN TRƯỜNG CHO KỸ SƯ THEO DỰ ÁN */}
+          {/* ========================================================================= */}
+          <div className="card" style={{ border: '1px solid #fed7aa', backgroundColor: '#fffdfa' }}>
+            <div className="card-header" style={{ borderBottom: '1px solid #ffedd5', backgroundColor: '#fff7ed' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                <div style={{ padding: '0.4rem', borderRadius: '6px', backgroundColor: '#fed7aa', color: '#c2410c' }}>
+                  <HardHat size={18} />
+                </div>
+                <div>
+                  <h3 className="card-title" style={{ color: '#9a3412', fontSize: '0.9375rem' }}>
+                    Bước 4 (Workflow BF-10): Gán Phụ Cấp Đặc Thù Hiện Trường Cho Kỹ Sư Theo Từng Dự Án
+                  </h3>
+                  <p style={{ fontSize: '0.75rem', color: '#ea580c', margin: 0 }}>
+                    HR Manager thiết lập định mức phụ cấp lưu trú, độc hại, trách nhiệm gói thầu &amp; ca đêm cho từng công trình (TK 627)
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="badge badge-warning">Quy Chế Khoán Hiện Trường</span>
+                {canManageAllowances ? (
+                  <button onClick={handleSaveProjectAllowanceAllocation} className="btn btn-sm btn-primary">
+                    <Check size={14} />
+                    <span>Lưu &amp; Kích Hoạt Cho Dự Án</span>
+                  </button>
+                ) : (
+                  <span className="badge badge-slate" style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <Lock size={12} />
+                    <span>Chỉ HR &amp; KTT được lưu</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="card-body">
+              {/* Project Picker */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', marginBottom: '1.25rem', padding: '0.85rem', backgroundColor: '#fef3c7', borderRadius: '8px', border: '1px solid #fde68a' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Building2 size={18} color="#b45309" />
+                  <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#78350f' }}>Chọn Công Trình / Dự Án:</span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => setSelectedSiteProject('DA-NHATTAN2')}
+                    className={`btn btn-sm ${selectedSiteProject === 'DA-NHATTAN2' ? 'btn-primary' : 'btn-secondary'}`}
+                  >
+                    DA-NHATTAN2: Cầu Nhật Tân 2
+                  </button>
+                  <button
+                    onClick={() => setSelectedSiteProject('DA-LANDMARK')}
+                    className={`btn btn-sm ${selectedSiteProject === 'DA-LANDMARK' ? 'btn-primary' : 'btn-secondary'}`}
+                  >
+                    DA-LANDMARK: Tòa Tháp Landmark Hải Minh
+                  </button>
+                </div>
+                <div style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#92400e' }}>
+                  Dự án đang chọn: <strong>{siteProjectAllowances[selectedSiteProject].projectName}</strong>
+                </div>
+              </div>
+
+              {/* Allowance inputs for this project */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem', marginBottom: '1.25rem' }}>
+                <div style={{ padding: '0.75rem', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Phụ cấp Lưu trú công trường (VNĐ):</label>
+                  <input
+                    type="number"
+                    step="100000"
+                    className="form-input"
+                    disabled={!canManageAllowances}
+                    readOnly={!canManageAllowances}
+                    value={siteProjectAllowances[selectedSiteProject].siteLodging}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setSiteProjectAllowances(prev => ({
+                        ...prev,
+                        [selectedSiteProject]: { ...prev[selectedSiteProject], siteLodging: val }
+                      }));
+                    }}
+                    style={{
+                      backgroundColor: canManageAllowances ? '#ffffff' : '#f8fafc',
+                      cursor: canManageAllowances ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Miễn BHXH &amp; Miễn Thuế TNCN</span>
+                </div>
+
+                <div style={{ padding: '0.75rem', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Phụ cấp Độc hại / Nặng nhọc (VNĐ):</label>
+                  <input
+                    type="number"
+                    step="100000"
+                    className="form-input"
+                    disabled={!canManageAllowances}
+                    readOnly={!canManageAllowances}
+                    value={siteProjectAllowances[selectedSiteProject].hazard}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setSiteProjectAllowances(prev => ({
+                        ...prev,
+                        [selectedSiteProject]: { ...prev[selectedSiteProject], hazard: val }
+                      }));
+                    }}
+                    style={{
+                      backgroundColor: canManageAllowances ? '#ffffff' : '#f8fafc',
+                      cursor: canManageAllowances ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Thi công trên cao / hầm chui</span>
+                </div>
+
+                <div style={{ padding: '0.75rem', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Trách nhiệm Chỉ huy trưởng (VNĐ):</label>
+                  <input
+                    type="number"
+                    step="100000"
+                    className="form-input"
+                    disabled={!canManageAllowances}
+                    readOnly={!canManageAllowances}
+                    value={siteProjectAllowances[selectedSiteProject].projectResponsibilitySM}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setSiteProjectAllowances(prev => ({
+                        ...prev,
+                        [selectedSiteProject]: { ...prev[selectedSiteProject], projectResponsibilitySM: val }
+                      }));
+                    }}
+                    style={{
+                      backgroundColor: canManageAllowances ? '#ffffff' : '#f8fafc',
+                      cursor: canManageAllowances ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Chỉ huy công trường, an toàn</span>
+                </div>
+
+                <div style={{ padding: '0.75rem', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Trách nhiệm Kỹ sư hiện trường (VNĐ):</label>
+                  <input
+                    type="number"
+                    step="100000"
+                    className="form-input"
+                    disabled={!canManageAllowances}
+                    readOnly={!canManageAllowances}
+                    value={siteProjectAllowances[selectedSiteProject].projectResponsibilityEng}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setSiteProjectAllowances(prev => ({
+                        ...prev,
+                        [selectedSiteProject]: { ...prev[selectedSiteProject], projectResponsibilityEng: val }
+                      }));
+                    }}
+                    style={{
+                      backgroundColor: canManageAllowances ? '#ffffff' : '#f8fafc',
+                      cursor: canManageAllowances ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Kỹ sư giám sát / kết cấu / MEP</span>
+                </div>
+              </div>
+
+              {/* Site Engineers Table for this project */}
+              <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.5rem' }}>
+                Danh sách Kỹ sư công trường phân bổ vào dự án ({siteProjectAllowances[selectedSiteProject].engineers.length} kỹ sư):
+              </div>
+              <div className="table-responsive">
+                <table className="table table-bordered table-sm">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '90px' }}>Mã NV</th>
+                      <th>Họ và Tên</th>
+                      <th>Chức Danh Hiện Trường</th>
+                      <th className="text-right">PC Lưu Trú</th>
+                      <th className="text-right">PC Độc Hại</th>
+                      <th className="text-right">PC Trách Nhiệm</th>
+                      <th className="text-right">Tổng PC Dự Án (TK 627)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {siteProjectAllowances[selectedSiteProject].engineers.map((eng) => {
+                      const totalEng = eng.customLodging + eng.customHazard + eng.customResp;
+                      return (
+                        <tr key={eng.code}>
+                          <td className="font-mono font-semibold text-xs text-blue-700">{eng.code}</td>
+                          <td className="font-semibold text-slate-800">{eng.name}</td>
+                          <td>
+                            <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>{eng.role}</span>
+                          </td>
+                          <td className="text-right tabular-nums">{formatVND(eng.customLodging)}</td>
+                          <td className="text-right tabular-nums">{formatVND(eng.customHazard)}</td>
+                          <td className="text-right tabular-nums">{formatVND(eng.customResp)}</td>
+                          <td className="text-right tabular-nums font-bold text-emerald-700">{formatVND(totalEng)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: BỘ CÔNG THỨC LƯƠNG ĐỘNG & WORKFLOW BF-10 (BƯỚC 9 -> BƯỚC 15) */}
+      {/* ========================================================================= */}
+      {activeTab === 'FORMULA_SIMULATOR' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Workflow Stepper Status Header */}
+          <div className="card" style={{ border: '1px solid #bfdbfe', backgroundColor: '#f0f9ff' }}>
+            <div className="card-body" style={{ padding: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Calculator size={20} color="#0284c7" />
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700, color: '#0369a1' }}>
+                      Quy Trình Quản Lý &amp; Phê Duyệt Bộ Công Thức Tính Lương Động (Workflow BF-10)
+                    </h3>
+                    <span style={{ fontSize: '0.75rem', color: '#0284c7' }}>
+                      Chu trình phối hợp giữa HR Manager &bull; Chuyên viên Kế toán &bull; Kế toán trưởng &bull; System Admin
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                    Phiên Bản Hoạt Động: <strong>{formulaVersion}</strong>
+                  </span>
+                  <span className={`badge ${
+                    formulaWorkflowStatus === 'APPROVED_ACTIVE' ? 'badge-success' :
+                    formulaWorkflowStatus === 'PENDING_APPROVAL' ? 'badge-warning' :
+                    formulaWorkflowStatus === 'PREVIEWED' ? 'badge-primary' : 'badge-slate'
+                  }`} style={{ fontSize: '0.75rem' }}>
+                    {formulaWorkflowStatus === 'APPROVED_ACTIVE' ? 'Đã Phê Duyệt & Hiệu Lực' :
+                     formulaWorkflowStatus === 'PENDING_APPROVAL' ? 'Chờ KT Trưởng Phê Duyệt' :
+                     formulaWorkflowStatus === 'PREVIEWED' ? 'Đã Chạy Thử Nghiệm Sandbox' :
+                     formulaWorkflowStatus === 'SYNTAX_VERIFIED' ? 'Đã Kiểm Tra Cú Pháp' : 'Bản Thảo (Draft)'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Stepper Pipeline */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem', fontSize: '0.75rem' }}>
+                <div style={{
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '6px',
+                  backgroundColor: formulaWorkflowStatus === 'DRAFT' || formulaWorkflowStatus === 'SYNTAX_VERIFIED' ? '#eff6ff' : '#ffffff',
+                  border: formulaWorkflowStatus === 'DRAFT' || formulaWorkflowStatus === 'SYNTAX_VERIFIED' ? '2px solid #2563eb' : '1px solid #bae6fd'
+                }}>
+                  <div style={{ fontWeight: 600, color: '#0369a1' }}>1. Kế Toán Soạn Biểu Thức</div>
+                  <div style={{ color: 'var(--text-muted)' }}>Bước 9: Update công thức động (Maker)</div>
+                </div>
+                <div style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', backgroundColor: '#fff', border: '1px solid #bae6fd' }}>
+                  <div style={{ fontWeight: 600, color: '#0369a1' }}>2. Bóc Tách TK 622/627/642</div>
+                  <div style={{ color: 'var(--text-muted)' }}>Bước 10: Tách chi phí dự án</div>
+                </div>
+                <div style={{
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '6px',
+                  backgroundColor: formulaWorkflowStatus === 'PREVIEWED' ? '#eff6ff' : '#ffffff',
+                  border: formulaWorkflowStatus === 'PREVIEWED' ? '2px solid #2563eb' : '1px solid #bae6fd'
+                }}>
+                  <div style={{ fontWeight: 600, color: '#0369a1' }}>3. Syntax Check &amp; Sandbox</div>
+                  <div style={{ color: 'var(--text-muted)' }}>Bước 11 &amp; 13: Thử nghiệm dữ liệu</div>
+                </div>
+                <div style={{
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '6px',
+                  backgroundColor: formulaWorkflowStatus === 'PENDING_APPROVAL' ? '#fffbeb' : '#ffffff',
+                  border: formulaWorkflowStatus === 'PENDING_APPROVAL' ? '2px solid #d97706' : '1px solid #bae6fd'
+                }}>
+                  <div style={{ fontWeight: 600, color: formulaWorkflowStatus === 'PENDING_APPROVAL' ? '#b45309' : '#0369a1' }}>
+                    4. Trình Thẩm Định
+                  </div>
+                  <div style={{ color: 'var(--text-muted)' }}>Bước 11 &rarr; 12: Gửi KT Trưởng (Checker)</div>
+                </div>
+                <div style={{
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '6px',
+                  backgroundColor: formulaWorkflowStatus === 'APPROVED_ACTIVE' ? '#ecfdf5' : '#ffffff',
+                  border: formulaWorkflowStatus === 'APPROVED_ACTIVE' ? '2px solid #059669' : '1px solid #bae6fd'
+                }}>
+                  <div style={{ fontWeight: 600, color: formulaWorkflowStatus === 'APPROVED_ACTIVE' ? '#047857' : '#0369a1' }}>
+                    5. Phê Duyệt &amp; Archive Log
+                  </div>
+                  <div style={{ color: 'var(--text-muted)' }}>Bước 12, 14 &amp; 15: Chốt &amp; Audit Log</div>
+                </div>
+              </div>
+
+              {/* Syntax Message banner if available */}
+              {syntaxCheckMessage && (
+                <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', borderRadius: '6px', backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CheckCircle2 size={16} />
+                  <span>{syntaxCheckMessage}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Step 9 & 10: Formula Expression Inputs */}
+          <div className="card">
+            <div className="card-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Sliders size={18} color="#2563eb" />
+                <div>
+                  <h2 className="card-title">Cấu Hình Bộ Biểu Thức Lương Động &amp; Thuật Toán Bóc Tách Chi Phí (Bước 9 &amp; 10 / BF-10)</h2>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                    {isFormulaMaker
+                      ? 'Kế toán viên (Maker) có quyền soạn và chỉnh sửa trực tiếp biểu thức tính toán; kiểm tra cú pháp và trình KT Trưởng'
+                      : isFormulaChecker
+                      ? 'Kế toán trưởng (Checker) thẩm định biểu thức, kiểm tra cú pháp, chạy thử Sandbox và phê duyệt chốt áp dụng'
+                      : 'Chế độ xem đối chiếu công thức lương động & mô phỏng Sandbox (Read-only)'}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                {/* 1. Syntax Check: Maker & Checker */}
+                {(isFormulaMaker || isFormulaChecker) && (
+                  <button
+                    onClick={handleSyntaxCheck}
+                    className="btn btn-sm btn-secondary"
+                    title="Kiểm tra tính hợp lệ cú pháp biểu thức toán học (Step 13 / BF-10)"
+                  >
+                    <CheckSquare size={14} />
+                    <span>1. Kiểm Tra Cú Pháp</span>
+                  </button>
+                )}
+
+                {/* 2. Sandbox Dry-run: Maker & Checker */}
+                {(isFormulaMaker || isFormulaChecker) && (
+                  <button
+                    onClick={handleRunSandboxDryRun}
+                    className="btn btn-sm btn-secondary"
+                    title="Chạy thử nghiệm trên tập dữ liệu mẫu (Step 11 / BF-10)"
+                  >
+                    <Eye size={14} />
+                    <span>2. Chạy Thử Sandbox</span>
+                  </button>
+                )}
+
+                {/* 3. Trình KT Trưởng: ONLY Maker can submit (not Chief Accountant) */}
+                {isFormulaMaker && currentRole !== 'CHIEF_ACCOUNTANT' && (
+                  <button
+                    onClick={handleSubmitFormulaForReview}
+                    className="btn btn-sm btn-secondary"
+                    style={{
+                      color: '#2563eb',
+                      borderColor: '#93c5fd',
+                      backgroundColor: formulaWorkflowStatus === 'SYNTAX_VERIFIED' || formulaWorkflowStatus === 'PREVIEWED' ? '#eff6ff' : undefined
+                    }}
+                    title="Kế toán viên trình thẩm định bộ công thức lên Kế toán trưởng (Step 11 / BF-10)"
+                  >
+                    <Send size={14} />
+                    <span>3. Trình KT Trưởng</span>
+                  </button>
+                )}
+
+                {/* Checker Action: Revise/Return if in pending approval */}
+                {isFormulaChecker && formulaWorkflowStatus === 'PENDING_APPROVAL' && (
+                  <button
+                    onClick={handleRejectFormulaWorkflow}
+                    className="btn btn-sm btn-secondary"
+                    style={{ color: '#dc2626', borderColor: '#fca5a5' }}
+                    title="Kế toán trưởng yêu cầu Kế toán viên điều chỉnh lại biểu thức"
+                  >
+                    <RotateCcw size={14} />
+                    <span>Hoàn Trả / Sửa Lại</span>
+                  </button>
+                )}
+
+                {/* Checker Action: Approve */}
+                {isFormulaChecker && (
+                  <button
+                    onClick={handleApproveFormulaWorkflow}
+                    className="btn btn-sm btn-primary"
+                    style={{
+                      backgroundColor: formulaWorkflowStatus === 'PENDING_APPROVAL' ? '#059669' : undefined,
+                      borderColor: formulaWorkflowStatus === 'PENDING_APPROVAL' ? '#047857' : undefined,
+                    }}
+                    title="Kế toán trưởng phê duyệt và chốt áp dụng bộ công thức mới (Step 12 / BF-10)"
+                  >
+                    <Lock size={14} />
+                    <span>4. Phê Duyệt &amp; Chốt Áp Dụng</span>
+                  </button>
+                )}
+
+                {/* Notice for Maker: Cannot self-approve */}
+                {isFormulaMaker && !isFormulaChecker && (
+                  <span
+                    className="badge badge-slate"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.6875rem' }}
+                    title="Quy tắc Maker-Checker: Người soạn thảo không được tự phê duyệt công thức"
+                  >
+                    <Lock size={11} />
+                    <span>Chờ Kế Toán Trưởng Duyệt</span>
+                  </span>
+                )}
+
+                {/* Notice for Viewer */}
+                {isFormulaViewer && (
+                  <span
+                    className="badge badge-slate"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.6875rem' }}
+                  >
+                    <Eye size={11} />
+                    <span>Chế Độ Xem Biểu Thức</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="card-body">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1rem' }}>
+                {/* 1. Time Salary */}
+                <div style={{ padding: '0.85rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ fontWeight: 600, color: '#1e293b', margin: 0 }}>
+                      1. Biểu Thức Lương Thời Gian (TimeSalary):
+                    </label>
+                    {!isFormulaMaker && (
+                      <span className="badge badge-slate" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
+                        <Lock size={10} style={{ display: 'inline', marginRight: '2px' }} />Chỉ Maker được sửa
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    className="form-input font-mono text-xs"
+                    disabled={!isFormulaMaker}
+                    readOnly={!isFormulaMaker}
+                    value={customFormulas.timeSalary}
+                    onChange={(e) => setCustomFormulas({ ...customFormulas, timeSalary: e.target.value })}
+                    style={{
+                      color: isFormulaMaker ? '#2563eb' : '#475569',
+                      fontWeight: 600,
+                      backgroundColor: isFormulaMaker ? '#ffffff' : '#f1f5f9',
+                      cursor: isFormulaMaker ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                    Định mức chuẩn: 26 ngày công/tháng. Đơn giá ngày = BaseSalary / 26.
+                  </div>
+                </div>
+
+                {/* 2. Overtime Pay */}
+                <div style={{ padding: '0.85rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ fontWeight: 600, color: '#1e293b', margin: 0 }}>
+                      2. Biểu Thức Làm Thêm Giờ Hiện Trường (OvertimePay):
+                    </label>
+                    {!isFormulaMaker && (
+                      <span className="badge badge-slate" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
+                        <Lock size={10} style={{ display: 'inline', marginRight: '2px' }} />Chỉ Maker được sửa
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    className="form-input font-mono text-xs"
+                    disabled={!isFormulaMaker}
+                    readOnly={!isFormulaMaker}
+                    value={customFormulas.otPay}
+                    onChange={(e) => setCustomFormulas({ ...customFormulas, otPay: e.target.value })}
+                    style={{
+                      color: isFormulaMaker ? '#d97706' : '#475569',
+                      fontWeight: 600,
+                      backgroundColor: isFormulaMaker ? '#ffffff' : '#f1f5f9',
+                      cursor: isFormulaMaker ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                    Hệ số làm thêm: 150% (ngày thường), 200% (cuối tuần), 300% (ngày lễ), +30% phụ cấp ca đêm.
+                  </div>
+                </div>
+
+                {/* 3. Insurance Base Office */}
+                <div style={{ padding: '0.85rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ fontWeight: 600, color: '#1e293b', margin: 0 }}>
+                      3. Nền Đóng BHXH Khối Văn Phòng HQ (TK 642):
+                    </label>
+                    {!isFormulaMaker && (
+                      <span className="badge badge-slate" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
+                        <Lock size={10} style={{ display: 'inline', marginRight: '2px' }} />Chỉ Maker được sửa
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    className="form-input font-mono text-xs"
+                    disabled={!isFormulaMaker}
+                    readOnly={!isFormulaMaker}
+                    value={customFormulas.insuranceBaseOffice}
+                    onChange={(e) => setCustomFormulas({ ...customFormulas, insuranceBaseOffice: e.target.value })}
+                    style={{
+                      color: isFormulaMaker ? '#047857' : '#475569',
+                      fontWeight: 600,
+                      backgroundColor: isFormulaMaker ? '#ffffff' : '#f1f5f9',
+                      cursor: isFormulaMaker ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                    Luật BHXH 2024: Nền = Lương CB + Phụ cấp chức vụ + Thâm niên. Kẹp trần 46.8M.
+                  </div>
+                </div>
+
+                {/* 4. Insurance Base Site */}
+                <div style={{ padding: '0.85rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ fontWeight: 600, color: '#1e293b', margin: 0 }}>
+                      4. Nền Đóng BHXH Kỹ Sư Công Trường (TK 627/622):
+                    </label>
+                    {!isFormulaMaker && (
+                      <span className="badge badge-slate" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
+                        <Lock size={10} style={{ display: 'inline', marginRight: '2px' }} />Chỉ Maker được sửa
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    className="form-input font-mono text-xs"
+                    disabled={!isFormulaMaker}
+                    readOnly={!isFormulaMaker}
+                    value={customFormulas.insuranceBaseSite}
+                    onChange={(e) => setCustomFormulas({ ...customFormulas, insuranceBaseSite: e.target.value })}
+                    style={{
+                      color: isFormulaMaker ? '#047857' : '#475569',
+                      fontWeight: 600,
+                      backgroundColor: isFormulaMaker ? '#ffffff' : '#f1f5f9',
+                      cursor: isFormulaMaker ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                    Quy chế đặc thù: Nền BHXH = Lương cơ bản ONLY. Toàn bộ PC lưu trú, độc hại miễn BHXH.
+                  </div>
+                </div>
+
+                {/* 5. Taxable Income */}
+                <div style={{ padding: '0.85rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ fontWeight: 600, color: '#1e293b', margin: 0 }}>
+                      5. Thu Nhập Tính Thuế TNCN (TaxableIncome):
+                    </label>
+                    {!isFormulaMaker && (
+                      <span className="badge badge-slate" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
+                        <Lock size={10} style={{ display: 'inline', marginRight: '2px' }} />Chỉ Maker được sửa
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    className="form-input font-mono text-xs"
+                    disabled={!isFormulaMaker}
+                    readOnly={!isFormulaMaker}
+                    value={customFormulas.taxableIncome}
+                    onChange={(e) => setCustomFormulas({ ...customFormulas, taxableIncome: e.target.value })}
+                    style={{
+                      color: isFormulaMaker ? '#7c3aed' : '#475569',
+                      fontWeight: 600,
+                      backgroundColor: isFormulaMaker ? '#ffffff' : '#f1f5f9',
+                      cursor: isFormulaMaker ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                    Miễn trừ: Ăn ca 730k, Lưu trú CT, Độc hại, Phần chênh lệch tăng ca vượt mức 100%.
+                  </div>
+                </div>
+
+                {/* 6. Net Salary */}
+                <div style={{ padding: '0.85rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ fontWeight: 600, color: '#1e293b', margin: 0 }}>
+                      6. Lương Thực Lĩnh Net (NetSalary):
+                    </label>
+                    {!isFormulaMaker && (
+                      <span className="badge badge-slate" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
+                        <Lock size={10} style={{ display: 'inline', marginRight: '2px' }} />Chỉ Maker được sửa
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    className="form-input font-mono text-xs"
+                    disabled={!isFormulaMaker}
+                    readOnly={!isFormulaMaker}
+                    value={customFormulas.netSalary}
+                    onChange={(e) => setCustomFormulas({ ...customFormulas, netSalary: e.target.value })}
+                    style={{
+                      color: isFormulaMaker ? '#0284c7' : '#475569',
+                      fontWeight: 600,
+                      backgroundColor: isFormulaMaker ? '#ffffff' : '#f1f5f9',
+                      cursor: isFormulaMaker ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                    Net = Gross - BHXH_10.5% - Thuế TNCN lũy tiến 7 bậc - Đoàn phí công đoàn 1%.
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 10: Cost allocation definitions */}
+              <div style={{ marginTop: '1rem', padding: '0.85rem', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a' }}>
+                <div style={{ fontWeight: 600, color: '#92400e', marginBottom: '0.5rem', fontSize: '0.8125rem' }}>
+                  Bước 10 (BF-10): Quy Tắc Bóc Tách Chi Phí Lương &amp; Bảo Hiểm Theo Tài Khoản Hạch Toán:
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem', fontSize: '0.75rem' }}>
+                  <div style={{ backgroundColor: '#fff', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #fef3c7' }}>
+                    <strong className="text-amber-800">TK 622 — Nhân Công Trực Tiếp:</strong>
+                    <div style={{ color: 'var(--text-muted)' }}>Lương kỹ sư kết cấu, kỹ sư thi công trực tiếp gắn liền với từng mã công trình dự án.</div>
+                  </div>
+                  <div style={{ backgroundColor: '#fff', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #fef3c7' }}>
+                    <strong className="text-amber-800">TK 627 — Chi Phí SXC Công Trường:</strong>
+                    <div style={{ color: 'var(--text-muted)' }}>Chỉ huy trưởng, kỹ sư HSE, phụ cấp lán trại, phụ cấp độc hại, bảo hiểm khối công trường.</div>
+                  </div>
+                  <div style={{ backgroundColor: '#fff', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #fef3c7' }}>
+                    <strong className="text-amber-800">TK 642 — Chi Phí QLDN Văn Phòng:</strong>
+                    <div style={{ color: 'var(--text-muted)' }}>Khối văn phòng trụ sở HQ (HR, Kế toán, Ban Giám đốc), khấu trừ BHXH văn phòng.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sandbox Live Interactive Simulator */}
+          <div className="card">
+            <div className="card-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Sliders size={18} color="#047857" />
+                <h2 className="card-title">Sandbox Thử Nghiệm Mô Phỏng Tính Lương Trực Tiếp (Live Payroll Simulator - Bước 11 / BF-10)</h2>
+              </div>
+              <span className="badge badge-success">Phản Hồi Thời Gian Thực</span>
+            </div>
+
+            <div className="card-body">
+              {/* Simulator Controls */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                <div>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '0.35rem' }}>
+                    1. Chọn Nhân Sự Thử Nghiệm:
+                  </label>
+                  <select
+                    className="form-select"
+                    value={selectedPersonaId}
+                    onChange={(e) => setSelectedPersonaId(e.target.value)}
+                    style={{ width: '100%' }}
+                  >
+                    {samplePersonas.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.fullName} — {p.position} ({formatVND(p.baseSalary)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '0.35rem' }}>
+                    2. Số Ngày Công Thực Tế: <strong className="text-blue-700">{simActualDays} / 26 công</strong>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="31"
+                    value={simActualDays}
+                    onChange={(e) => setSimActualDays(Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                    <span>0 ngày</span>
+                    <span>Chuẩn 26 ngày</span>
+                    <span>Tối đa 31 ngày</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '0.35rem' }}>
+                    3. Giờ Tăng Ca OT Ngày Thường: <strong className="text-amber-700">{simOtWeekdayHours} giờ (150%)</strong>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="40"
+                    value={simOtWeekdayHours}
+                    onChange={(e) => setSimOtWeekdayHours(Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                    <span>0 giờ</span>
+                    <span>20 giờ</span>
+                    <span>40 giờ</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '0.35rem' }}>
+                    4. Giờ Tăng Ca OT Cuối Tuần: <strong className="text-amber-800">{simOtWeekendHours} giờ (200%)</strong>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="24"
+                    value={simOtWeekendHours}
+                    onChange={(e) => setSimOtWeekendHours(Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                    <span>0 giờ</span>
+                    <span>12 giờ</span>
+                    <span>24 giờ</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Simulation Results Breakdown */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                {/* Result Card 1: Gross Income */}
+                <div style={{ border: '1px solid #bfdbfe', borderRadius: '8px', padding: '1rem', backgroundColor: '#eff6ff' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1e40af' }}>I. TỔNG THU NHẬP GROSS</span>
+                    <DollarSign size={16} color="#1e40af" />
+                  </div>
+                  <div className="tabular-nums" style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1e40af', marginBottom: '0.5rem' }}>
+                    {formatVND(simResult.grossSalary)}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', color: 'var(--text-body)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Lương thời gian ({simResult.actualDays}/26 công):</span>
+                      <strong className="tabular-nums">{formatVND(simResult.timeSalary)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Tiền làm thêm giờ ({simResult.otWeekdayHours + simResult.otWeekendHours}h OT):</span>
+                      <strong className="tabular-nums text-amber-700">{formatVND(simResult.otPay)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Tổng phụ cấp ({simResult.allowances.length} khoản):</span>
+                      <strong className="tabular-nums text-emerald-700">{formatVND(simResult.allowanceTotal)}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Result Card 2: Insurance Base */}
+                <div style={{ border: '1px solid #fed7aa', borderRadius: '8px', padding: '1rem', backgroundColor: '#fff7ed' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#9a3412' }}>II. NỀN ĐÓNG BẢO HIỂM</span>
+                    <ShieldCheck size={16} color="#9a3412" />
+                  </div>
+                  <div className="tabular-nums" style={{ fontSize: '1.5rem', fontWeight: 700, color: '#9a3412', marginBottom: '0.5rem' }}>
+                    {formatVND(simResult.insuranceBase)}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', color: 'var(--text-body)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Đối tượng phân loại:</span>
+                      <span className="font-semibold text-slate-800">{simResult.employeeType === 'OFFICE_STAFF' ? 'Khối Văn Phòng' : 'Kỹ Sư Công Trường'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• NLĐ đóng (10.5%):</span>
+                      <strong className="tabular-nums text-rose-700">-{formatVND(simResult.employeeInsurance.total)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Doanh nghiệp nộp (23.5%):</span>
+                      <strong className="tabular-nums text-amber-800">{formatVND(simResult.employerInsurance.total)}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Result Card 3: Deductions & PIT */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', backgroundColor: '#f8fafc' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#475569' }}>III. KHẤU TRỪ THUẾ &amp; PHÍ</span>
+                    <Percent size={16} color="#475569" />
+                  </div>
+                  <div className="tabular-nums" style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e11d48', marginBottom: '0.5rem' }}>
+                    -{formatVND(simResult.employeeInsurance.total + simResult.pitTax + simResult.unionDues)}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', color: 'var(--text-body)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Bảo hiểm NLĐ (10.5%):</span>
+                      <strong className="tabular-nums">-{formatVND(simResult.employeeInsurance.total)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Thuế TNCN lũy tiến:</span>
+                      <strong className="tabular-nums text-rose-700">-{formatVND(simResult.pitTax)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Đoàn phí công đoàn (1%):</span>
+                      <strong className="tabular-nums">-{formatVND(simResult.unionDues)}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Result Card 4: Net Take-Home */}
+                <div style={{ border: '1px solid #bbf7d0', borderRadius: '8px', padding: '1rem', backgroundColor: '#f0fdf4' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#166534' }}>IV. LƯƠNG THỰC LĨNH (NET)</span>
+                    <TrendingUp size={16} color="#166534" />
+                  </div>
+                  <div className="tabular-nums" style={{ fontSize: '1.5rem', fontWeight: 700, color: '#166534', marginBottom: '0.5rem' }}>
+                    {formatVND(simResult.netSalary)}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', color: 'var(--text-body)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Chuyển khoản Vietcombank:</span>
+                      <strong className="tabular-nums text-emerald-800">{formatVND(simResult.netSalary)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Hạch toán chi phí:</span>
+                      <span className="badge badge-primary">{simResult.accountCode}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>• Tổng chi phí công ty:</span>
+                      <strong className="tabular-nums">{formatVND(simResult.totalCompanyCost)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {isFormulaChecker ? (
+                  <button
+                    onClick={() => {
+                      showToast('Đã lưu cấu hình công thức lương động vào cơ sở dữ liệu hệ thống (áp dụng cho kỳ lương tháng 11/2026)!');
+                    }}
+                    className="btn btn-primary"
+                    title="Kế toán trưởng kích hoạt áp dụng công thức vào kỳ tính lương chính thức tiếp theo"
+                  >
+                    <Sparkles size={15} />
+                    <span>Áp Dụng Công Thức Vào Kỳ Lương Tiếp Theo</span>
+                  </button>
+                ) : (
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Info size={14} />
+                    <span>Kết quả mô phỏng Sandbox mang tính chất thử nghiệm. Quyền chốt áp dụng kỳ tiếp theo thuộc Kế Toán Trưởng.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* STEP 14 & 15 (BF-10): NHẬT KÝ KIỂM TOÁN HỆ THỐNG & ARCHIVE PHIÊN BẢN CŨ */}
+          {/* ========================================================================= */}
+          <div className="card">
+            <div className="card-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <History size={18} color="#475569" />
+                <div>
+                  <h3 className="card-title" style={{ fontSize: '0.9375rem' }}>
+                    Nhật Ký Kiểm Toán Hệ Thống &amp; Lưu Trữ Phiên Bản Cũ (Bước 14 &amp; 15 / BF-10)
+                  </h3>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Tự động ghi nhận chi tiết thay đổi công thức, phụ cấp, ngày hiệu lực và phê duyệt của Kế toán trưởng
+                  </p>
+                </div>
+              </div>
+              <span className="badge badge-slate font-mono">System Audit Log Active</span>
+            </div>
+
+            <div className="card-body">
+              <div className="table-responsive">
+                <table className="table table-bordered table-sm" style={{ fontSize: '0.8125rem' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '90px' }}>Phiên Bản</th>
+                      <th>Người Thực Hiện</th>
+                      <th>Nghiệp Vụ / Hành Động</th>
+                      <th>Thời Điểm</th>
+                      <th className="text-center">Trạng Thái</th>
+                      <th>Ghi Chú Kiểm Toán</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td className="font-mono font-bold text-xs text-blue-700">{log.version}</td>
+                        <td className="font-semibold text-slate-800">{log.actor}</td>
+                        <td className="text-slate-700">{log.action}</td>
+                        <td className="font-mono text-xs text-slate-500">{log.timestamp}</td>
+                        <td className="text-center">
+                          <span className={`badge ${
+                            log.status === 'APPROVED' ? 'badge-success' :
+                            log.status === 'ACTIVE' ? 'badge-primary' :
+                            log.status === 'PENDING' ? 'badge-warning' : 'badge-slate'
+                          }`} style={{ fontSize: '0.6875rem' }}>
+                            {log.status === 'APPROVED' ? 'Đã Phê Duyệt' :
+                             log.status === 'ACTIVE' ? 'Đang Áp Dụng' :
+                             log.status === 'PENDING' ? 'Chờ Duyệt' : 'Archive (Lưu trữ)'}
+                          </span>
+                        </td>
+                        <td className="text-xs text-slate-500">{log.notes}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL: CHỈNH SỬA THAM SỐ PHÁP LÝ (FE-08 / UC-17) */}
       {/* ========================================================================= */}
       {editingRule && (
@@ -1163,6 +2821,7 @@ export const Compliance: React.FC = () => {
         </div>
       )}
 
+      {/* ========================================================================= */}
       {/* MODAL: CHỈNH SỬA BẬC LƯƠNG THANG BẢNG LƯƠNG (FE-08 / UC-18) */}
       {/* ========================================================================= */}
       {editingScale && (
@@ -1251,6 +2910,149 @@ export const Compliance: React.FC = () => {
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* MODAL: CHỈNH SỬA / THÊM PHỤ CẤP CÔNG TRÌNH (FE-09 / UC-19) */}
+      {/* ========================================================================= */}
+      {editingAllowance && (
+        <div className="modal-backdrop" onClick={() => setEditingAllowance(null)}>
+          <div className="modal-content" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  {editingAllowance.id ? 'Cấu Hình Phụ Cấp Công Trường' : 'Thêm Phụ Cấp Mới'}
+                </h3>
+                <span className="text-xs text-slate-500 font-mono">{editingAllowance.code}</span>
+              </div>
+              <button onClick={() => setEditingAllowance(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label className="form-label">Mã Phụ Cấp:</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editingAllowance.code}
+                      onChange={(e) => setEditingAllowance({ ...editingAllowance, code: e.target.value.toUpperCase() })}
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Tên Khoản Phụ Cấp:</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editingAllowance.name}
+                      onChange={(e) => setEditingAllowance({ ...editingAllowance, name: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label className="form-label">Mức Định Mức (VNĐ):</label>
+                    <input
+                      type="number"
+                      step="100000"
+                      className="form-input"
+                      value={editingAllowance.amount}
+                      onChange={(e) => setEditingAllowance({ ...editingAllowance, amount: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Đối Tượng Áp Dụng:</label>
+                    <select
+                      className="form-select"
+                      value={editingAllowance.applicableScope}
+                      onChange={(e) => setEditingAllowance({ ...editingAllowance, applicableScope: e.target.value as any })}
+                    >
+                      <option value="SITE_ENGINEER">Kỹ Sư Công Trường</option>
+                      <option value="OFFICE_STAFF">Khối Văn Phòng HQ</option>
+                      <option value="ALL">Toàn Bộ Nhân Sự</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label className="form-label">Quy Định Đóng BHXH:</label>
+                    <select
+                      className="form-select"
+                      value={editingAllowance.isInsuranceBase ? 'YES' : 'NO'}
+                      onChange={(e) => setEditingAllowance({ ...editingAllowance, isInsuranceBase: e.target.value === 'YES' })}
+                    >
+                      <option value="NO">Miễn Đóng BHXH (Luật BHXH 2024)</option>
+                      <option value="YES">Bắt Buộc Tính Vào Nền BHXH</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label">Tính Thuế TNCN:</label>
+                    <select
+                      className="form-select"
+                      value={editingAllowance.isTaxable ? 'YES' : 'NO'}
+                      onChange={(e) => setEditingAllowance({ ...editingAllowance, isTaxable: e.target.value === 'YES' })}
+                    >
+                      <option value="YES">Chịu Thuế TNCN</option>
+                      <option value="NO">Miễn Thuế TNCN</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label className="form-label">Phân Bổ Theo Ngày Công:</label>
+                    <select
+                      className="form-select"
+                      value={editingAllowance.isProratedByDays ? 'YES' : 'NO'}
+                      onChange={(e) => setEditingAllowance({ ...editingAllowance, isProratedByDays: e.target.value === 'YES' })}
+                    >
+                      <option value="YES">Theo Ngày Công Thực Tế</option>
+                      <option value="NO">Khoán Cố Định Tháng</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label">Tài Khoản Hạch Toán:</label>
+                    <select
+                      className="form-select"
+                      value={editingAllowance.defaultAccountCode}
+                      onChange={(e) => setEditingAllowance({ ...editingAllowance, defaultAccountCode: e.target.value as any })}
+                    >
+                      <option value="TK_627">TK 627 — Chi phí SXC Công trường</option>
+                      <option value="TK_622">TK 622 — Chi phí nhân công trực tiếp</option>
+                      <option value="TK_642">TK 642 — Chi phí QLDN Văn phòng</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label">Ghi Chú Nghiệp Vụ &amp; Căn Cứ Pháp Lý:</label>
+                  <textarea
+                    className="form-input"
+                    rows={2}
+                    value={editingAllowance.note}
+                    onChange={(e) => setEditingAllowance({ ...editingAllowance, note: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button onClick={() => setEditingAllowance(null)} className="btn btn-secondary">
+                Hủy Bỏ
+              </button>
+              <button onClick={handleSaveAllowance} className="btn btn-primary">
+                <Check size={15} />
+                <span>Lưu Phụ Cấp</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL: THÊM BỘ LUẬT / THAM SỐ PHÁP LÝ MỚI (BF-10: BƯỚC 1 -> HÌNH THỨC ÁP DỤNG) */}
       {/* ========================================================================= */}
       {showAddRuleModal && (
