@@ -9,6 +9,7 @@ import com.hmcps.repository.EmployeeRepository;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -50,8 +51,15 @@ public class EmployeeController {
         return ResponseEntity.ok(emp);
     }
 
+    @PreAuthorize("hasAnyRole('HR_MANAGER', 'ADMIN')")
     @PostMapping
     public ResponseEntity<Employee> createEmployee(@RequestBody Employee employee) {
+        if (employee.getBaseSalary() != null && employee.getBaseSalary().compareTo(new java.math.BigDecimal("5310000")) < 0) {
+            throw new IllegalArgumentException("Vi phạm Nghị định 74/2024/NĐ-CP: Mức lương cơ bản không được thấp hơn Lương tối thiểu vùng I (5.310.000 VNĐ) hoặc là số âm!");
+        }
+        if (employee.getDependentsCount() != null && employee.getDependentsCount() < 0) {
+            throw new IllegalArgumentException("Số người phụ thuộc giảm trừ gia cảnh không được là số âm!");
+        }
         Employee created = employeeRepository.save(employee);
         return ResponseEntity.ok(created);
     }
@@ -60,6 +68,13 @@ public class EmployeeController {
     public ResponseEntity<Employee> updateEmployee(@PathVariable Long id, @RequestBody Employee request) {
         Employee emp = employeeRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy nhân viên với ID: " + id));
+
+        if (request.getBaseSalary() != null && request.getBaseSalary().compareTo(new java.math.BigDecimal("5310000")) < 0) {
+            throw new IllegalArgumentException("Vi phạm Nghị định 74/2024/NĐ-CP: Mức lương cơ bản không được thấp hơn Lương tối thiểu vùng I (5.310.000 VNĐ) hoặc là số âm!");
+        }
+        if (request.getDependentsCount() != null && request.getDependentsCount() < 0) {
+            throw new IllegalArgumentException("Số người phụ thuộc giảm trừ gia cảnh không được là số âm!");
+        }
 
         emp.setFullName(request.getFullName());
         emp.setEmail(request.getEmail());
