@@ -49,11 +49,11 @@ public class WorkflowRequestController {
         // Seed initial Overtime Requests
         overtimeMap.put(101L, OvertimeDto.builder()
                 .id(101L)
-                .employeeId(7L)
-                .employeeCode("HM-ENG-01")
+                .employeeId(6L)
+                .employeeCode("HM-006")
                 .employeeName("Trần Văn Trung")
                 .projectId(1L)
-                .projectName("Dự án Cầu Nhật Tân 2")
+                .projectName("Cầu Nhật Tân 2 & Nút Giao Vành Đai")
                 .workDate("2026-10-21")
                 .startTime("21:00")
                 .endTime("03:00")
@@ -69,11 +69,11 @@ public class WorkflowRequestController {
 
         overtimeMap.put(102L, OvertimeDto.builder()
                 .id(102L)
-                .employeeId(8L)
-                .employeeCode("HM-ENG-02")
+                .employeeId(7L)
+                .employeeCode("HM-007")
                 .employeeName("Phạm Thành Nam")
                 .projectId(1L)
-                .projectName("Dự án Cầu Nhật Tân 2")
+                .projectName("Cầu Nhật Tân 2 & Nút Giao Vành Đai")
                 .workDate("2026-10-22")
                 .startTime("18:00")
                 .endTime("22:00")
@@ -90,26 +90,44 @@ public class WorkflowRequestController {
         // Seed initial Leave Requests
         leaveMap.put(201L, LeaveDto.builder()
                 .id(201L)
-                .employeeId(6L)
-                .employeeCode("HM-HR-02")
+                .employeeId(4L)
+                .employeeCode("HM-004")
                 .employeeName("Nguyễn Thu Giang")
                 .leaveType("ANNUAL")
                 .startDate("2026-10-24")
                 .endDate("2026-10-24")
                 .daysCount(1.0)
                 .reason("Nghỉ phép thường niên theo Điều 113 BLLĐ.")
+                .siteManagerApproval("NOT_REQUIRED")
+                .hrApproval("APPROVED")
                 .status("APPROVED")
                 .createdAt("2026-10-23 09:00")
+                .build());
+
+        leaveMap.put(202L, LeaveDto.builder()
+                .id(202L)
+                .employeeId(6L)
+                .employeeCode("HM-006")
+                .employeeName("Trần Văn Trung")
+                .leaveType("ANNUAL")
+                .startDate("2026-10-28")
+                .endDate("2026-10-29")
+                .daysCount(2.0)
+                .reason("Nghỉ phép năm giải quyết việc gia đình tại quê nhà.")
+                .siteManagerApproval("PENDING")
+                .hrApproval("PENDING")
+                .status("PENDING_SM")
+                .createdAt("2026-10-25 14:20")
                 .build());
 
         // Seed initial Attendance Explanations
         explanationMap.put(301L, ExplanationDto.builder()
                 .id(301L)
-                .employeeId(7L)
-                .employeeCode("HM-ENG-01")
+                .employeeId(6L)
+                .employeeCode("HM-006")
                 .employeeName("Trần Văn Trung")
                 .projectId(1L)
-                .projectName("Dự án Cầu Nhật Tân 2")
+                .projectName("Cầu Nhật Tân 2 & Nút Giao Vành Đai")
                 .targetDate("2026-10-20")
                 .explanationType("GPS_DEVIATION")
                 .suggestedCheckIn("07:30")
@@ -120,6 +138,38 @@ public class WorkflowRequestController {
                 .status("PENDING_HR")
                 .createdAt("2026-10-20 18:00")
                 .build());
+
+        explanationMap.put(302L, ExplanationDto.builder()
+                .id(302L)
+                .employeeId(7L)
+                .employeeCode("HM-007")
+                .employeeName("Phạm Thành Nam")
+                .projectId(1L)
+                .projectName("Cầu Nhật Tân 2 & Nút Giao Vành Đai")
+                .targetDate("2026-10-19")
+                .explanationType("MISSING_CHECKIN")
+                .suggestedCheckIn("07:00")
+                .suggestedCheckOut("17:00")
+                .reason("Mất sóng 4G tại tầng hầm B2 công trường không nhận được mã OTP kịp giờ.")
+                .siteManagerApproval("PENDING")
+                .hrApproval("PENDING")
+                .status("PENDING_SM")
+                .createdAt("2026-10-19 19:10")
+                .build());
+    }
+
+    private boolean isOfficeStaffEmployee(Long employeeId, String employeeCode, Long projectId) {
+        if (projectId != null && projectId == 0L) return true;
+        if (employeeCode != null && List.of("HM-001", "HM-002", "HM-003", "HM-004", "HM-015", "HM-016", "HM-017").contains(employeeCode)) {
+            return true;
+        }
+        if (employeeId != null) {
+            Employee emp = employeeRepository.findById(employeeId).orElse(null);
+            if (emp != null && emp.getEmployeeType() != null && "OFFICE_STAFF".equalsIgnoreCase(emp.getEmployeeType().name())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ==========================================
@@ -147,6 +197,7 @@ public class WorkflowRequestController {
         private String siteManagerApproval; // PENDING, APPROVED, REJECTED
         private String hrApproval;          // PENDING, APPROVED, REJECTED
         private String status;              // PENDING_SM, PENDING_HR, APPROVED, REJECTED
+        private String rejectionReason;
         private String createdAt;
     }
 
@@ -154,6 +205,7 @@ public class WorkflowRequestController {
     public static class ApproveOtRequest {
         private String role;       // SITE_MANAGER or HR_MANAGER
         private boolean approved;
+        private String rejectionReason;
     }
 
     @GetMapping("/requests/overtime")
@@ -184,20 +236,25 @@ public class WorkflowRequestController {
             });
         }
         if (req.getProjectId() != null) {
-            projectRepository.findById(req.getProjectId()).ifPresent(p -> {
-                req.setProjectName(p.getName());
-            });
+            if (req.getProjectId() == 0L) {
+                req.setProjectName("Văn Phòng Trụ Sở Chính HQ (TK 642)");
+            } else {
+                projectRepository.findById(req.getProjectId()).ifPresent(p -> {
+                    req.setProjectName(p.getName());
+                });
+            }
         }
 
-        req.setSiteManagerApproval("PENDING");
+        boolean isOffice = isOfficeStaffEmployee(req.getEmployeeId(), req.getEmployeeCode(), req.getProjectId());
+        req.setSiteManagerApproval(isOffice ? "APPROVED" : "PENDING");
         req.setHrApproval("PENDING");
-        req.setStatus("PENDING_SM");
+        req.setStatus(isOffice ? "PENDING_HR" : "PENDING_SM");
         req.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
 
         try {
             OvertimeRequest entity = OvertimeRequest.builder()
                     .employeeId(req.getEmployeeId() != null ? req.getEmployeeId() : 1L)
-                    .projectId(req.getProjectId() != null ? req.getProjectId() : 1L)
+                    .projectId(req.getProjectId() != null && req.getProjectId() > 0 ? req.getProjectId() : 1L)
                     .workDate(req.getWorkDate() != null ? LocalDate.parse(req.getWorkDate()) : LocalDate.now())
                     .startTime(req.getStartTime() != null ? req.getStartTime() : "18:00")
                     .endTime(req.getEndTime() != null ? req.getEndTime() : "22:00")
@@ -205,9 +262,9 @@ public class WorkflowRequestController {
                     .otType(req.getOtType() != null ? req.getOtType() : "WEEKDAY_150")
                     .multiplier(BigDecimal.valueOf(req.getMultiplier() != null ? req.getMultiplier() : 1.5))
                     .reason(req.getReason() != null ? req.getReason() : "Tăng ca thi công hiện trường")
-                    .siteManagerApproval("PENDING")
-                    .hrApproval("PENDING")
-                    .status("PENDING_SM")
+                    .siteManagerApproval(req.getSiteManagerApproval())
+                    .hrApproval(req.getHrApproval())
+                    .status(req.getStatus())
                     .build();
             OvertimeRequest saved = overtimeRequestRepository.save(entity);
             req.setId(saved.getId());
@@ -218,7 +275,7 @@ public class WorkflowRequestController {
         return ResponseEntity.ok(req);
     }
 
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SITE_MANAGER', 'HR_MANAGER', 'ADMIN')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SITE_MANAGER', 'HR_MANAGER', 'HR_STAFF', 'HR_OFFICER', 'ADMIN', 'SYSTEM_ADMIN')")
     @PutMapping("/requests/overtime/{id}/approve")
     public ResponseEntity<OvertimeDto> approveOvertime(
             @PathVariable Long id,
@@ -235,6 +292,9 @@ public class WorkflowRequestController {
                 req.setHrApproval("REJECTED");
             }
             req.setStatus("REJECTED");
+            if (body.getRejectionReason() != null && !body.getRejectionReason().isBlank()) {
+                req.setRejectionReason(body.getRejectionReason().trim());
+            }
         } else {
             if ("SITE_MANAGER".equalsIgnoreCase(body.getRole())) {
                 req.setSiteManagerApproval("APPROVED");
@@ -301,13 +361,18 @@ public class WorkflowRequestController {
         private String endDate;
         private Double daysCount;
         private String reason;
-        private String status;    // PENDING, APPROVED, REJECTED
+        private String siteManagerApproval;
+        private String hrApproval;
+        private String status;    // PENDING_SM, PENDING_HR, PENDING, APPROVED, REJECTED
+        private String rejectionReason;
         private String createdAt;
     }
 
     @Data
     public static class ApproveLeaveRequest {
+        private String level;     // SM or HR
         private boolean approved;
+        private String rejectionReason;
     }
 
     @GetMapping("/requests/leave")
@@ -332,7 +397,10 @@ public class WorkflowRequestController {
             });
         }
 
-        req.setStatus("PENDING");
+        boolean isOffice = isOfficeStaffEmployee(req.getEmployeeId(), req.getEmployeeCode(), null);
+        req.setSiteManagerApproval(isOffice ? "NOT_REQUIRED" : "PENDING");
+        req.setHrApproval("PENDING");
+        req.setStatus(isOffice ? "PENDING" : "PENDING_SM");
         req.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
 
         try {
@@ -343,9 +411,9 @@ public class WorkflowRequestController {
                     .endDate(req.getEndDate() != null ? LocalDate.parse(req.getEndDate()) : LocalDate.now())
                     .daysCount(BigDecimal.valueOf(req.getDaysCount() != null ? req.getDaysCount() : 1.0))
                     .reason(req.getReason() != null ? req.getReason() : "Nghỉ phép thường niên")
-                    .siteManagerApproval("PENDING")
-                    .hrApproval("PENDING")
-                    .status("PENDING_SM")
+                    .siteManagerApproval(req.getSiteManagerApproval())
+                    .hrApproval(req.getHrApproval())
+                    .status(req.getStatus())
                     .build();
             LeaveRequest saved = leaveRequestRepository.save(entity);
             req.setId(saved.getId());
@@ -356,7 +424,7 @@ public class WorkflowRequestController {
         return ResponseEntity.ok(req);
     }
 
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('HR_MANAGER', 'ADMIN')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SITE_MANAGER', 'HR_MANAGER', 'HR_STAFF', 'HR_OFFICER', 'ADMIN', 'SYSTEM_ADMIN')")
     @PutMapping("/requests/leave/{id}/approve")
     public ResponseEntity<LeaveDto> approveLeave(
             @PathVariable Long id,
@@ -366,30 +434,48 @@ public class WorkflowRequestController {
             return ResponseEntity.notFound().build();
         }
 
-        req.setStatus(body.isApproved() ? "APPROVED" : "REJECTED");
+        boolean isSmLevel = "SM".equalsIgnoreCase(body.getLevel()) || "SITE_MANAGER".equalsIgnoreCase(body.getLevel());
+        if (!body.isApproved()) {
+            if (isSmLevel) {
+                req.setSiteManagerApproval("REJECTED");
+            } else {
+                req.setHrApproval("REJECTED");
+            }
+            req.setStatus("REJECTED");
+            if (body.getRejectionReason() != null && !body.getRejectionReason().isBlank()) {
+                req.setRejectionReason(body.getRejectionReason().trim());
+            }
+        } else {
+            if (isSmLevel) {
+                req.setSiteManagerApproval("APPROVED");
+                req.setStatus("PENDING_HR");
+            } else {
+                req.setHrApproval("APPROVED");
+                req.setStatus("APPROVED");
 
-        if (body.isApproved()) {
-            try {
-                LocalDate d = LocalDate.parse(req.getStartDate());
-                MonthlyTimesheet ts = timesheetRepository.findByEmployeeIdAndMonthAndYear(
-                        req.getEmployeeId(), d.getMonthValue(), d.getYear()).orElse(null);
-                if (ts != null) {
-                    BigDecimal days = BigDecimal.valueOf(req.getDaysCount() != null ? req.getDaysCount() : 1.0);
-                    if ("UNPAID".equalsIgnoreCase(req.getLeaveType())) {
-                        ts.setUnpaidLeaveDays(ts.getUnpaidLeaveDays().add(days));
-                    } else {
-                        ts.setPaidLeaveDays(ts.getPaidLeaveDays().add(days));
+                try {
+                    LocalDate d = LocalDate.parse(req.getStartDate());
+                    MonthlyTimesheet ts = timesheetRepository.findByEmployeeIdAndMonthAndYear(
+                            req.getEmployeeId(), d.getMonthValue(), d.getYear()).orElse(null);
+                    if (ts != null) {
+                        BigDecimal days = BigDecimal.valueOf(req.getDaysCount() != null ? req.getDaysCount() : 1.0);
+                        if ("UNPAID".equalsIgnoreCase(req.getLeaveType())) {
+                            ts.setUnpaidLeaveDays(ts.getUnpaidLeaveDays().add(days));
+                        } else {
+                            ts.setPaidLeaveDays(ts.getPaidLeaveDays().add(days));
+                        }
+                        timesheetRepository.save(ts);
                     }
-                    timesheetRepository.save(ts);
+                } catch (Exception ignored) {
                 }
-            } catch (Exception ignored) {
             }
         }
 
         try {
             leaveRequestRepository.findById(id).ifPresent(entity -> {
                 entity.setStatus(req.getStatus());
-                entity.setHrApproval(body.isApproved() ? "APPROVED" : "REJECTED");
+                entity.setSiteManagerApproval(req.getSiteManagerApproval());
+                entity.setHrApproval(req.getHrApproval());
                 leaveRequestRepository.save(entity);
             });
             auditLogRepository.save(AuditLog.builder()
@@ -429,6 +515,7 @@ public class WorkflowRequestController {
         private String siteManagerApproval;
         private String hrApproval;
         private String status;
+        private String rejectionReason;
         private String createdAt;
     }
 
@@ -436,6 +523,7 @@ public class WorkflowRequestController {
     public static class ApproveExplanationRequest {
         private String level;    // SM or HR
         private boolean approved;
+        private String rejectionReason;
     }
 
     @GetMapping("/attendance/explanations")
@@ -461,14 +549,19 @@ public class WorkflowRequestController {
             });
         }
         if (req.getProjectId() != null) {
-            projectRepository.findById(req.getProjectId()).ifPresent(p -> {
-                req.setProjectName(p.getName());
-            });
+            if (req.getProjectId() == 0L) {
+                req.setProjectName("Văn Phòng Trụ Sở Chính HQ (TK 642)");
+            } else {
+                projectRepository.findById(req.getProjectId()).ifPresent(p -> {
+                    req.setProjectName(p.getName());
+                });
+            }
         }
 
-        req.setSiteManagerApproval("PENDING");
+        boolean isOffice = isOfficeStaffEmployee(req.getEmployeeId(), req.getEmployeeCode(), req.getProjectId());
+        req.setSiteManagerApproval(isOffice ? "APPROVED" : "PENDING");
         req.setHrApproval("PENDING");
-        req.setStatus("PENDING_SM");
+        req.setStatus(isOffice ? "PENDING_HR" : "PENDING_SM");
         req.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
 
         try {
@@ -482,9 +575,9 @@ public class WorkflowRequestController {
                     .actualHours(new BigDecimal("8.00"))
                     .reason(req.getReason() != null ? req.getReason() : "Giải trình bù công")
                     .evidenceUrl(req.getEvidenceUrl())
-                    .siteManagerApproval("PENDING")
-                    .hrApproval("PENDING")
-                    .status("PENDING_SM")
+                    .siteManagerApproval(req.getSiteManagerApproval())
+                    .hrApproval(req.getHrApproval())
+                    .status(req.getStatus())
                     .build();
             AttendanceExplanation saved = attendanceExplanationRepository.save(entity);
             req.setId(saved.getId());
@@ -495,7 +588,7 @@ public class WorkflowRequestController {
         return ResponseEntity.ok(req);
     }
 
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SITE_MANAGER', 'HR_MANAGER', 'ADMIN')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SITE_MANAGER', 'HR_MANAGER', 'HR_STAFF', 'HR_OFFICER', 'ADMIN', 'SYSTEM_ADMIN')")
     @PutMapping("/attendance/explanations/{id}/approve")
     public ResponseEntity<ExplanationDto> approveExplanation(
             @PathVariable Long id,
@@ -512,6 +605,9 @@ public class WorkflowRequestController {
                 req.setHrApproval("REJECTED");
             }
             req.setStatus("REJECTED");
+            if (body.getRejectionReason() != null && !body.getRejectionReason().isBlank()) {
+                req.setRejectionReason(body.getRejectionReason().trim());
+            }
         } else {
             if ("SM".equalsIgnoreCase(body.getLevel())) {
                 req.setSiteManagerApproval("APPROVED");

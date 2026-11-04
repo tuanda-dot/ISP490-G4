@@ -46,6 +46,11 @@ public class DataInitializer implements CommandLineRunner {
     private final PayrollRepository payrollRepository;
     private final PayrollItemRepository payrollItemRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SalaryGradeRepository salaryGradeRepository;
+    private final OvertimeRequestRepository overtimeRequestRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
+    private final AttendanceExplanationRepository attendanceExplanationRepository;
+    private final AuditLogRepository auditLogRepository;
 
     @Override
     @Transactional
@@ -54,6 +59,7 @@ public class DataInitializer implements CommandLineRunner {
 
         seedComplianceRules();
         seedSalaryComponents();
+        seedSalaryGrades();
         seedShifts();
 
         if (departmentRepository.count() == 0) {
@@ -62,8 +68,13 @@ public class DataInitializer implements CommandLineRunner {
             seedEmployeesAndContracts();
             seedSiteAssignmentsAndOtps();
             seedTimesheetsAndPayroll();
+            seedWorkflowRequests();
+            seedAuditLogs();
             log.info("HMCPS demo dataset successfully initialized!");
         } else {
+            ensureStandardDemoAccounts();
+            seedWorkflowRequests();
+            seedAuditLogs();
             log.info("HMCPS database already initialized with {} employees and {} departments.",
                     employeeRepository.count(), departmentRepository.count());
         }
@@ -177,6 +188,137 @@ public class DataInitializer implements CommandLineRunner {
         projectRepository.saveAll(List.of(p1, p2, p3));
     }
 
+    private List<Employee> buildStandardEmployees(Department bgd, Department hr, Department kt, Department bql, String defaultPasswordHash) {
+        return List.of(
+                // 1. HM-001: Tổng Giám Đốc
+                Employee.builder().employeeCode("HM-001").fullName("Lê Phúc Hà").email("ceo.ha@haiminh.vn")
+                        .phone("0901234567").citizenId("001085001234").departmentId(bgd.getId()).position("Tổng Giám Đốc")
+                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_DIRECTOR").baseSalary(new BigDecimal("45000000.00"))
+                        .dependentsCount(2).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2020, 1, 1)).build(),
+
+                // 2. HM-002: Kế Toán Trưởng
+                Employee.builder().employeeCode("HM-002").fullName("Đoàn Anh Tuấn").email("ketoantruong.tuan@haiminh.vn")
+                        .phone("0902345678").citizenId("001088002345").departmentId(kt.getId()).position("Kế Toán Trưởng")
+                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_CHIEF_ACCOUNTANT").baseSalary(new BigDecimal("28000000.00"))
+                        .dependentsCount(1).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2022, 5, 1)).build(),
+
+                // 3. HM-003: Quản Trị Hệ Thống
+                Employee.builder().employeeCode("HM-003").fullName("Nguyễn Hữu Thịnh").email("admin.thinh@haiminh.vn")
+                        .phone("0903456789").citizenId("001092003456").departmentId(bgd.getId()).position("Quản Trị Hệ Thống")
+                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_ADMIN").baseSalary(new BigDecimal("22000000.00"))
+                        .dependentsCount(0).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 1, 1)).build(),
+
+                // 4. HM-004: Trưởng Phòng Nhân Sự
+                Employee.builder().employeeCode("HM-004").fullName("Nguyễn Thu Giang").email("hr.giang@haiminh.vn")
+                        .phone("0904567890").citizenId("001095004567").departmentId(hr.getId()).position("Trưởng Phòng Nhân Sự")
+                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_HR_MANAGER").baseSalary(new BigDecimal("26000000.00"))
+                        .dependentsCount(1).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2021, 11, 1)).build(),
+
+                // 5. HM-005: Chỉ Huy Trưởng Công Trường
+                Employee.builder().employeeCode("HM-005").fullName("Nguyễn Lê Gia Phát").email("chihuytruong.phat@haiminh.vn")
+                        .phone("0905678901").citizenId("001090005678").departmentId(bql.getId()).position("Chỉ Huy Trưởng Công Trường")
+                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_MANAGER").baseSalary(new BigDecimal("38000000.00"))
+                        .dependentsCount(1).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2022, 3, 1)).build(),
+
+                // 6. HM-006: Kỹ Sư Kết Cấu Hiện Trường
+                Employee.builder().employeeCode("HM-006").fullName("Trần Văn Trung").email("kysu.trung@haiminh.vn")
+                        .phone("0906789012").citizenId("001094006789").departmentId(bql.getId()).position("Kỹ Sư Kết Cấu Hiện Trường")
+                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_ENGINEER").baseSalary(new BigDecimal("25000000.00"))
+                        .dependentsCount(1).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2023, 6, 1)).build(),
+
+                // 7. HM-007: Kỹ Sư Giám Sát MEP
+                Employee.builder().employeeCode("HM-007").fullName("Phạm Thành Nam").email("kysu.nam@haiminh.vn")
+                        .phone("0907890123").citizenId("001096007890").departmentId(bql.getId()).position("Kỹ Sư Giám Sát MEP")
+                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_ENGINEER").baseSalary(new BigDecimal("21000000.00"))
+                        .dependentsCount(0).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 3, 1)).build(),
+
+                // 8. HM-008: Kỹ Sư Trắc Địa Công Trường
+                Employee.builder().employeeCode("HM-008").fullName("Đặng Hoàng Nam").email("kysu.hoangnam@haiminh.vn")
+                        .phone("0908111222").citizenId("001095008111").departmentId(bql.getId()).position("Kỹ Sư Trắc Địa Công Trường")
+                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_ENGINEER").baseSalary(new BigDecimal("20000000.00"))
+                        .dependentsCount(0).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 2, 1)).build(),
+
+                // 9. HM-009: Kỹ Sư An Toàn Lao Động (HSE)
+                Employee.builder().employeeCode("HM-009").fullName("Lê Minh Khôi").email("kysu.khoi@haiminh.vn")
+                        .phone("0908222333").citizenId("001095008222").departmentId(bql.getId()).position("Kỹ Sư An Toàn Lao Động (HSE)")
+                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_ENGINEER").baseSalary(new BigDecimal("22000000.00"))
+                        .dependentsCount(1).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2023, 9, 1)).build(),
+
+                // 10. HM-010: Kỹ Sư Vật Liệu & Dự Toán QS
+                Employee.builder().employeeCode("HM-010").fullName("Vũ Trọng Nghĩa").email("kysu.nghia@haiminh.vn")
+                        .phone("0908333444").citizenId("001095008333").departmentId(bql.getId()).position("Kỹ Sư Vật Liệu & Dự Toán QS")
+                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_ENGINEER").baseSalary(new BigDecimal("23000000.00"))
+                        .dependentsCount(0).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2023, 10, 1)).build(),
+
+                // 11. HM-014: Tân Kỹ Sư (Đổi MK lần đầu)
+                Employee.builder().employeeCode("HM-014").fullName("Đặng Tuấn Tú").email("newbie.engineer@haiminh.vn")
+                        .phone("0908444555").citizenId("001099008444").departmentId(bql.getId()).position("Kỹ Sư Hiện Trường Tập Sự")
+                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_ENGINEER").baseSalary(new BigDecimal("16000000.00"))
+                        .dependentsCount(0).passwordHash(defaultPasswordHash).mustChangePassword(true).status("ACTIVE").hireDate(LocalDate.of(2026, 10, 1)).build(),
+
+                // 12. HM-015: Chuyên Viên Nhân Sự (C&B)
+                Employee.builder().employeeCode("HM-015").fullName("Phạm Thị Mai").email("hrstaff.mai@haiminh.vn")
+                        .phone("0908901234").citizenId("001097008901").departmentId(hr.getId()).position("Chuyên Viên Nhân Sự (C&B)")
+                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_HR_OFFICER").baseSalary(new BigDecimal("16000000.00"))
+                        .dependentsCount(0).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 2, 1)).build(),
+
+                // 13. HM-016: Chuyên Viên Kế Toán Tiền Lương
+                Employee.builder().employeeCode("HM-016").fullName("Hoàng Thị Lan").email("ketoan.lan@haiminh.vn")
+                        .phone("0909012345").citizenId("001098009012").departmentId(kt.getId()).position("Chuyên Viên Kế Toán Tiền Lương")
+                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_PAYROLL_ACCOUNTANT").baseSalary(new BigDecimal("18000000.00"))
+                        .dependentsCount(1).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2023, 8, 1)).build(),
+
+                // 14. HM-017: Chuyên Viên Hành Chính Tổng Hợp
+                Employee.builder().employeeCode("HM-017").fullName("Vũ Hải Đăng").email("vanphong.dang@haiminh.vn")
+                        .phone("0909123456").citizenId("001099009123").departmentId(hr.getId()).position("Chuyên Viên Hành Chính Tổng Hợp")
+                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_OFFICE_STAFF").baseSalary(new BigDecimal("14000000.00"))
+                        .dependentsCount(0).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 7, 1)).build()
+        );
+    }
+
+    private void ensureStandardDemoAccounts() {
+        String defaultPasswordHash = passwordEncoder.encode("Password123@");
+        Department bgd = departmentRepository.findByCode("BGD").orElseGet(() -> departmentRepository.findAll().get(0));
+        Department hr = departmentRepository.findByCode("HR").orElse(bgd);
+        Department kt = departmentRepository.findByCode("KT").orElse(bgd);
+        Department bql = departmentRepository.findByCode("BQL").orElse(bgd);
+
+        List<Employee> standardList = buildStandardEmployees(bgd, hr, kt, bql, defaultPasswordHash);
+        for (int i = 0; i < standardList.size(); i++) {
+            Employee std = standardList.get(i);
+            Employee existing = employeeRepository.findByEmail(std.getEmail()).orElse(null);
+            if (existing == null) {
+                existing = employeeRepository.findByEmployeeCode(std.getEmployeeCode()).orElse(null);
+            }
+            if (existing == null) {
+                Employee saved = employeeRepository.save(std);
+                Contract contract = Contract.builder()
+                        .contractNumber("HDLD-HM-2026/STD-" + saved.getEmployeeCode())
+                        .employeeId(saved.getId())
+                        .contractType(ContractType.OFFICIAL_INDEFINITE)
+                        .startDate(saved.getHireDate())
+                        .endDate(null)
+                        .baseSalary(saved.getBaseSalary())
+                        .insuranceFlag(InsuranceFlag.FULL)
+                        .taxFlag(TaxFlag.PROGRESSIVE)
+                        .status(ContractStatus.ACTIVE)
+                        .build();
+                contractRepository.save(contract);
+            } else {
+                existing.setEmployeeCode(std.getEmployeeCode());
+                existing.setFullName(std.getFullName());
+                existing.setEmail(std.getEmail());
+                existing.setPosition(std.getPosition());
+                existing.setRole(std.getRole());
+                existing.setEmployeeType(std.getEmployeeType());
+                existing.setBaseSalary(std.getBaseSalary());
+                existing.setDependentsCount(std.getDependentsCount());
+                existing.setStatus("ACTIVE");
+                employeeRepository.save(existing);
+            }
+        }
+    }
+
     private void seedEmployeesAndContracts() {
         String defaultPasswordHash = passwordEncoder.encode("Password123@");
 
@@ -185,89 +327,10 @@ public class DataInitializer implements CommandLineRunner {
         Department kt = departmentRepository.findByCode("KT").orElseThrow();
         Department bql = departmentRepository.findByCode("BQL").orElseThrow();
 
-        // 13 Employees representing all 13 RBAC roles:
-        List<Employee> employees = List.of(
-                // 1. ADMIN
-                Employee.builder().employeeCode("HM-ADMIN").fullName("Quản trị viên Hệ thống").email("admin@haiminh.vn")
-                        .phone("0981000001").citizenId("001090000001").departmentId(bgd.getId()).position("System Administrator")
-                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_ADMIN").baseSalary(new BigDecimal("25000000.00"))
-                        .passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 1, 1)).build(),
-
-                // 2. DIRECTOR / CEO
-                Employee.builder().employeeCode("HM-CEO").fullName("Nguyễn Văn An").email("ceo.an@haiminh.vn")
-                        .phone("0981000002").citizenId("001090000002").departmentId(bgd.getId()).position("Tổng Giám Đốc")
-                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_DIRECTOR").baseSalary(new BigDecimal("80000000.00"))
-                        .dependentsCount(2).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2020, 1, 1)).build(),
-
-                // 3. CHIEF ACCOUNTANT (Kế toán trưởng - Maker/Checker reviewer)
-                Employee.builder().employeeCode("HM-KT-01").fullName("Lê Phương Hà").email("ketoantruong.ha@haiminh.vn")
-                        .phone("0981000003").citizenId("001090000003").departmentId(kt.getId()).position("Kế toán trưởng")
-                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_CHIEF_ACCOUNTANT").baseSalary(new BigDecimal("35000000.00"))
-                        .dependentsCount(1).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2022, 5, 1)).build(),
-
-                // 4. PAYROLL ACCOUNTANT (Kế toán tiền lương)
-                Employee.builder().employeeCode("HM-KT-02").fullName("Đinh Anh Tuấn").email("ketoanluong.tuan@haiminh.vn")
-                        .phone("0981000004").citizenId("001090000004").departmentId(kt.getId()).position("Kế toán tiền lương")
-                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_PAYROLL_ACCOUNTANT").baseSalary(new BigDecimal("18000000.00"))
-                        .passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2023, 8, 1)).build(),
-
-                // 5. HR MANAGER (Trưởng phòng nhân sự - Khóa bảng công)
-                Employee.builder().employeeCode("HM-HR-01").fullName("Nguyễn Huy Thịnh").email("truongphonghr.thinh@haiminh.vn")
-                        .phone("0981000005").citizenId("001090000005").departmentId(hr.getId()).position("Trưởng phòng Nhân sự")
-                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_HR_MANAGER").baseSalary(new BigDecimal("30000000.00"))
-                        .dependentsCount(1).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2021, 11, 1)).build(),
-
-                // 6. HR OFFICER (Chuyên viên nhân sự)
-                Employee.builder().employeeCode("HM-HR-02").fullName("Nguyễn Trường Giang").email("chuyenvienhr.giang@haiminh.vn")
-                        .phone("0981000006").citizenId("001090000006").departmentId(hr.getId()).position("Chuyên viên Nhân sự & Chấm công")
-                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_HR_OFFICER").baseSalary(new BigDecimal("15000000.00"))
-                        .passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 2, 1)).build(),
-
-                // 7. SITE MANAGER 1 (Chỉ huy trưởng Cầu Nhật Tân 2)
-                Employee.builder().employeeCode("HM-SM-01").fullName("Nguyễn Lương Gia Phát").email("chihuytruong.phat@haiminh.vn")
-                        .phone("0981000007").citizenId("001090000007").departmentId(bql.getId()).position("Chỉ huy trưởng Công trình")
-                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_MANAGER").baseSalary(new BigDecimal("32000000.00"))
-                        .dependentsCount(2).passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2022, 3, 1)).build(),
-
-                // 8. SITE MANAGER 2 (Chỉ huy trưởng Landmark)
-                Employee.builder().employeeCode("HM-SM-02").fullName("Phạm Hoàng Long").email("chihuytruong.long@haiminh.vn")
-                        .phone("0981000008").citizenId("001090000008").departmentId(bql.getId()).position("Chỉ huy phó Công trình")
-                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_MANAGER").baseSalary(new BigDecimal("28000000.00"))
-                        .passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2023, 4, 1)).build(),
-
-                // 9. SITE ENGINEER 1 (Kỹ sư kết cấu công trường Cầu Nhật Tân)
-                Employee.builder().employeeCode("HM-SE-01").fullName("Vũ Thành Trung").email("kysu.trung@haiminh.vn")
-                        .phone("0981000009").citizenId("001090000009").departmentId(bql.getId()).position("Kỹ sư Giám sát Kết cấu")
-                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_ENGINEER").baseSalary(new BigDecimal("20000000.00"))
-                        .passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2023, 6, 1)).build(),
-
-                // 10. SITE ENGINEER 2 (Kỹ sư an toàn công trường)
-                Employee.builder().employeeCode("HM-SE-02").fullName("Hoàng Đức Nam").email("kysu.nam@haiminh.vn")
-                        .phone("0981000010").citizenId("001090000010").departmentId(bql.getId()).position("Kỹ sư An toàn Lao động (HSE)")
-                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_ENGINEER").baseSalary(new BigDecimal("18000000.00"))
-                        .passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 3, 1)).build(),
-
-                // 11. SITE ENGINEER 3 (Kỹ sư QS hiện trường)
-                Employee.builder().employeeCode("HM-SE-03").fullName("Trần Minh Quân").email("kysu.quan@haiminh.vn")
-                        .phone("0981000011").citizenId("001090000011").departmentId(bql.getId()).position("Kỹ sư Khối lượng QS")
-                        .employeeType(EmployeeType.SITE_ENGINEER).role("ROLE_SITE_ENGINEER").baseSalary(new BigDecimal("19000000.00"))
-                        .passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 4, 1)).build(),
-
-                // 12. OFFICE STAFF (Nhân viên hành chính tổng hợp)
-                Employee.builder().employeeCode("HM-NV-01").fullName("Đỗ Thùy Linh").email("nhanvien.linh@haiminh.vn")
-                        .phone("0981000012").citizenId("001090000012").departmentId(hr.getId()).position("Chuyên viên Hành chính Lễ tân")
-                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_OFFICE_STAFF").baseSalary(new BigDecimal("12000000.00"))
-                        .passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 7, 1)).build(),
-
-                // 13. SUPERVISOR (Giảng viên hướng dẫn / Giám sát độc lập)
-                Employee.builder().employeeCode("HM-SUP-01").fullName("Thầy Nguyễn Văn An (GVHD)").email("supervisor.an@haiminh.vn")
-                        .phone("0981000013").citizenId("001090000013").departmentId(bgd.getId()).position("Cố vấn & Giảng viên Hướng dẫn")
-                        .employeeType(EmployeeType.OFFICE_STAFF).role("ROLE_SUPERVISOR").baseSalary(new BigDecimal("10000000.00"))
-                        .passwordHash(defaultPasswordHash).mustChangePassword(false).status("ACTIVE").hireDate(LocalDate.of(2024, 1, 1)).build()
-        );
+        List<Employee> employees = buildStandardEmployees(bgd, hr, kt, bql, defaultPasswordHash);
 
         employeeRepository.saveAll(employees);
-        log.info("Seeded {} employees across 13 roles.", employees.size());
+        log.info("Seeded {} employees across standard HMCPS roles.", employees.size());
 
         // Create Active Contracts for all employees
         for (int i = 0; i < employees.size(); i++) {
@@ -293,14 +356,14 @@ public class DataInitializer implements CommandLineRunner {
         Project pLandmark = projectRepository.findByCode("DA-LANDMARK").orElseThrow();
 
         Employee smPhat = employeeRepository.findByEmail("chihuytruong.phat@haiminh.vn").orElseThrow();
-        Employee smLong = employeeRepository.findByEmail("chihuytruong.long@haiminh.vn").orElseThrow();
         Employee seTrung = employeeRepository.findByEmail("kysu.trung@haiminh.vn").orElseThrow();
         Employee seNam = employeeRepository.findByEmail("kysu.nam@haiminh.vn").orElseThrow();
-        Employee seQuan = employeeRepository.findByEmail("kysu.quan@haiminh.vn").orElseThrow();
+        Employee seHoangNam = employeeRepository.findByEmail("kysu.hoangnam@haiminh.vn").orElseThrow();
+        Employee seKhoi = employeeRepository.findByEmail("kysu.khoi@haiminh.vn").orElseThrow();
 
         // Assign Site Managers to projects
         pNhatTan.setSiteManagerId(smPhat.getId());
-        pLandmark.setSiteManagerId(smLong.getId());
+        pLandmark.setSiteManagerId(smPhat.getId());
         projectRepository.saveAll(List.of(pNhatTan, pLandmark));
 
         // Engineer Assignments
@@ -310,20 +373,20 @@ public class DataInitializer implements CommandLineRunner {
                 EngineerAssignment.builder().employeeId(seTrung.getId()).projectId(pNhatTan.getId())
                         .roleOnSite("Kỹ sư Giám sát Kết cấu").assignedDate(LocalDate.of(2026, 1, 15)).status("ACTIVE").build(),
                 EngineerAssignment.builder().employeeId(seNam.getId()).projectId(pNhatTan.getId())
-                        .roleOnSite("Kỹ sư An toàn Lao động").assignedDate(LocalDate.of(2026, 2, 1)).status("ACTIVE").build(),
-                EngineerAssignment.builder().employeeId(smLong.getId()).projectId(pLandmark.getId())
-                        .roleOnSite("Chỉ huy trưởng").assignedDate(LocalDate.of(2026, 3, 1)).status("ACTIVE").build(),
-                EngineerAssignment.builder().employeeId(seQuan.getId()).projectId(pLandmark.getId())
-                        .roleOnSite("Kỹ sư Khối lượng QS").assignedDate(LocalDate.of(2026, 3, 10)).status("ACTIVE").build()
+                        .roleOnSite("Kỹ sư Giám sát MEP").assignedDate(LocalDate.of(2026, 2, 1)).status("ACTIVE").build(),
+                EngineerAssignment.builder().employeeId(seHoangNam.getId()).projectId(pNhatTan.getId())
+                        .roleOnSite("Kỹ sư Trắc địa").assignedDate(LocalDate.of(2026, 2, 15)).status("ACTIVE").build(),
+                EngineerAssignment.builder().employeeId(seKhoi.getId()).projectId(pLandmark.getId())
+                        .roleOnSite("Kỹ sư An toàn Lao động").assignedDate(LocalDate.of(2026, 3, 10)).status("ACTIVE").build()
         );
         engineerAssignmentRepository.saveAll(assignments);
 
-        // Daily Site OTP for today (2026-10-19 / 2026-10-20)
+        // Daily Site OTP for today
         LocalDate today = LocalDate.now();
         DailySiteOtp otp1 = DailySiteOtp.builder()
-                .projectId(pNhatTan.getId()).otpCode("886699").validDate(today).generatedBy(smPhat.getId()).isActive(true).build();
+                .projectId(pNhatTan.getId()).otpCode("849201").validDate(today).generatedBy(smPhat.getId()).isActive(true).build();
         DailySiteOtp otp2 = DailySiteOtp.builder()
-                .projectId(pLandmark.getId()).otpCode("773355").validDate(today).generatedBy(smLong.getId()).isActive(true).build();
+                .projectId(pLandmark.getId()).otpCode("773355").validDate(today).generatedBy(smPhat.getId()).isActive(true).build();
         dailySiteOtpRepository.saveAll(List.of(otp1, otp2));
         log.info("Seeded Site Engineer assignments and today's active OTPs for projects.");
     }
@@ -464,5 +527,154 @@ public class DataInitializer implements CommandLineRunner {
             payrollItemRepository.save(item);
         }
         log.info("Seeded sample Payroll PR-{}-{} with {} 8-column items.", currentYear, currentMonth, allEmployees.size());
+    }
+
+    private void seedSalaryGrades() {
+        if (salaryGradeRepository.count() > 0) return;
+
+        List<SalaryGrade> grades = List.of(
+                SalaryGrade.builder().gradeCode("VP-B1").gradeName("Chuyên Viên Tập Sự / Thử Việc")
+                        .employeeType("OFFICE_STAFF").levelOrder(1)
+                        .minSalary(new BigDecimal("10000000")).maxSalary(new BigDecimal("14000000"))
+                        .standardStep(new BigDecimal("1000000")).description("Nhân viên hành chính, kế toán thử việc").build(),
+                SalaryGrade.builder().gradeCode("VP-B2").gradeName("Chuyên Viên Chính Văn Phòng")
+                        .employeeType("OFFICE_STAFF").levelOrder(2)
+                        .minSalary(new BigDecimal("15000000")).maxSalary(new BigDecimal("22000000"))
+                        .standardStep(new BigDecimal("1500000")).description("Chuyên viên nhân sự, kế toán tiền lương").build(),
+                SalaryGrade.builder().gradeCode("VP-B3").gradeName("Chuyên Viên Cao Cấp / Phó Phòng")
+                        .employeeType("OFFICE_STAFF").levelOrder(3)
+                        .minSalary(new BigDecimal("23000000")).maxSalary(new BigDecimal("32000000"))
+                        .standardStep(new BigDecimal("2000000")).description("Phó phòng kế toán, trưởng nhóm tuyển dụng").build(),
+                SalaryGrade.builder().gradeCode("VP-B4").gradeName("Trưởng Phòng / Kế Toán Trưởng")
+                        .employeeType("OFFICE_STAFF").levelOrder(4)
+                        .minSalary(new BigDecimal("35000000")).maxSalary(new BigDecimal("50000000"))
+                        .standardStep(new BigDecimal("3000000")).description("Trưởng phòng HR, Kế toán trưởng").build(),
+                SalaryGrade.builder().gradeCode("VP-B5").gradeName("Ban Giám Đốc Điều Hành")
+                        .employeeType("OFFICE_STAFF").levelOrder(5)
+                        .minSalary(new BigDecimal("55000000")).maxSalary(new BigDecimal("80000000"))
+                        .standardStep(new BigDecimal("5000000")).description("Phó Tổng Giám Đốc, Tổng Giám Đốc").build(),
+
+                SalaryGrade.builder().gradeCode("CT-B1").gradeName("Kỹ Sư Hiện Trường Mới Ra Trường")
+                        .employeeType("SITE_ENGINEER").levelOrder(1)
+                        .minSalary(new BigDecimal("14000000")).maxSalary(new BigDecimal("18000000"))
+                        .standardStep(new BigDecimal("1000000")).description("Kỹ sư trắc địa, giám sát tập sự").build(),
+                SalaryGrade.builder().gradeCode("CT-B2").gradeName("Kỹ Sư Kết Cấu / MEP Độc Lập")
+                        .employeeType("SITE_ENGINEER").levelOrder(2)
+                        .minSalary(new BigDecimal("19000000")).maxSalary(new BigDecimal("26000000"))
+                        .standardStep(new BigDecimal("1500000")).description("Kỹ sư trực tiếp phụ trách mũi thi công").build(),
+                SalaryGrade.builder().gradeCode("CT-B3").gradeName("Kỹ Sư Giám Sát Trưởng / Đội Trưởng")
+                        .employeeType("SITE_ENGINEER").levelOrder(3)
+                        .minSalary(new BigDecimal("27000000")).maxSalary(new BigDecimal("35000000"))
+                        .standardStep(new BigDecimal("2000000")).description("Chỉ huy phó, đội trưởng thi công dầm/móng").build(),
+                SalaryGrade.builder().gradeCode("CT-B4").gradeName("Chỉ Huy Trưởng Công Trường")
+                        .employeeType("SITE_ENGINEER").levelOrder(4)
+                        .minSalary(new BigDecimal("36000000")).maxSalary(new BigDecimal("55000000"))
+                        .standardStep(new BigDecimal("3000000")).description("Chỉ huy trưởng gói thầu trọng điểm").build()
+        );
+        salaryGradeRepository.saveAll(grades);
+        log.info("Seeded {} construction standard Salary Grades (UC-18).", grades.size());
+    }
+
+    private void seedWorkflowRequests() {
+        if (overtimeRequestRepository.count() == 0) {
+            List<OvertimeRequest> ots = List.of(
+                    OvertimeRequest.builder()
+                            .employeeId(6L)
+                            .projectId(1L)
+                            .workDate(LocalDate.of(2026, 10, 21))
+                            .startTime("21:00")
+                            .endTime("03:00")
+                            .otHours(new BigDecimal("6.00"))
+                            .otType("NIGHT_SHIFT_ADDITIONAL")
+                            .multiplier(new BigDecimal("1.80"))
+                            .reason("Trực kỹ thuật giám sát đổ bê tông dầm cầu nhịp chính K14 ca đêm.")
+                            .siteManagerApproval("APPROVED")
+                            .siteManagerId(5L)
+                            .hrApproval("PENDING")
+                            .status("PENDING_HR")
+                            .build(),
+                    OvertimeRequest.builder()
+                            .employeeId(7L)
+                            .projectId(1L)
+                            .workDate(LocalDate.of(2026, 10, 22))
+                            .startTime("18:00")
+                            .endTime("22:00")
+                            .otHours(new BigDecimal("4.00"))
+                            .otType("WEEKDAY_150")
+                            .multiplier(new BigDecimal("1.50"))
+                            .reason("Lắp đặt hệ thống cáp dự ứng lực nhịp dẫn bờ Bắc.")
+                            .siteManagerApproval("PENDING")
+                            .siteManagerId(5L)
+                            .hrApproval("PENDING")
+                            .status("PENDING_SM")
+                            .build()
+            );
+            overtimeRequestRepository.saveAll(ots);
+            log.info("Seeded {} Overtime Requests (UC-13).", ots.size());
+        }
+
+        if (leaveRequestRepository.count() == 0) {
+            List<LeaveRequest> leaves = List.of(
+                    LeaveRequest.builder()
+                            .employeeId(4L)
+                            .leaveType("ANNUAL")
+                            .startDate(LocalDate.of(2026, 10, 24))
+                            .endDate(LocalDate.of(2026, 10, 24))
+                            .daysCount(new BigDecimal("1.00"))
+                            .reason("Nghỉ phép thường niên theo Điều 113 BLLĐ.")
+                            .siteManagerApproval("NOT_REQUIRED")
+                            .hrApproval("APPROVED")
+                            .hrManagerId(4L)
+                            .status("APPROVED")
+                            .build()
+            );
+            leaveRequestRepository.saveAll(leaves);
+            log.info("Seeded {} Leave Requests (UC-10).", leaves.size());
+        }
+
+        if (attendanceExplanationRepository.count() == 0) {
+            List<AttendanceExplanation> explanations = List.of(
+                    AttendanceExplanation.builder()
+                            .employeeId(6L)
+                            .projectId(1L)
+                            .targetDate(LocalDate.of(2026, 10, 20))
+                            .explanationType("GPS_DRIFT")
+                            .suggestedCheckIn("07:30")
+                            .suggestedCheckOut("17:15")
+                            .actualHours(new BigDecimal("8.00"))
+                            .reason("Khảo sát đáy trụ cầu dưới hố móng P3, dầm thép dày che chắn sóng GPS.")
+                            .siteManagerApproval("APPROVED")
+                            .siteManagerId(5L)
+                            .hrApproval("PENDING")
+                            .status("PENDING_HR")
+                            .build()
+            );
+            attendanceExplanationRepository.saveAll(explanations);
+            log.info("Seeded {} Attendance Explanations (UC-11).", explanations.size());
+        }
+    }
+
+    private void seedAuditLogs() {
+        if (auditLogRepository.count() > 0) return;
+
+        List<AuditLog> logs = List.of(
+                AuditLog.builder()
+                        .action("SYSTEM_INIT")
+                        .entityName("compliance_rules")
+                        .performedByName("Hệ Thống Tự Động")
+                        .performedByRole("SYSTEM_ADMIN")
+                        .description("Khởi tạo bộ tham số pháp lý Luật Lao Động 2026 (Nghị định 158/2025/NĐ-CP)")
+                        .build(),
+                AuditLog.builder()
+                        .action("PAYROLL_FORMULA_VERIFIED")
+                        .entityName("payrolls")
+                        .entityId(1L)
+                        .performedByName("Đoàn Anh Tuấn (Kế Toán Trưởng)")
+                        .performedByRole("CHIEF_ACCOUNTANT")
+                        .description("Thẩm tra & Ký số duyệt bảng lương tháng 10/2026 (Maker-Checker Cấp 2)")
+                        .build()
+        );
+        auditLogRepository.saveAll(logs);
+        log.info("Seeded {} System Audit Logs (UC-28).", logs.size());
     }
 }
