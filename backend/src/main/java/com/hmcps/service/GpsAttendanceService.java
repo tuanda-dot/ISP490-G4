@@ -30,6 +30,7 @@ public class GpsAttendanceService {
     private final DailySiteOtpRepository dailySiteOtpRepository;
     private final AttendanceRepository attendanceRepository;
     private final EngineerAssignmentRepository assignmentRepository;
+    private final ShiftRepository shiftRepository;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
