@@ -2,18 +2,19 @@ package com.hmcps.controller;
 
 import com.hmcps.entity.Attendance;
 import com.hmcps.entity.DailySiteOtp;
+import com.hmcps.service.BiometricAttendanceService;
 import com.hmcps.service.GpsAttendanceService;
 import com.hmcps.service.GpsAttendanceService.GpsCheckInRequest;
 import com.hmcps.service.GpsAttendanceService.GpsCheckInResult;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * REST Controller cho Điểm danh Hiện trường & Quản lý OTP Ca Làm việc (UC-07 & UC-08)
- * Phụ trách bởi: GiangNT
- */
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
 @RestController
 @RequestMapping("/api/attendance")
 @RequiredArgsConstructor
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 public class AttendanceController {
 
     private final GpsAttendanceService gpsAttendanceService;
+    private final BiometricAttendanceService biometricAttendanceService;
 
     @Data
     public static class GenerateOtpRequest {
@@ -36,13 +38,15 @@ public class AttendanceController {
     }
 
     @Data
-    public static class VerifyOtpRequest {
-        private Long projectId;
-        private String otpCode;
+    public static class IngestBiometricRequest {
+        private Long deviceId;
+        private Integer biometricUserId;
+        private LocalDateTime timestamp;
+        private String verifyType;
     }
 
     /**
-     * Chỉ huy trưởng (Site Manager) sinh mã OTP động theo ngày cho công trình (UC-08)
+     * Chỉ huy trưởng (Site Manager) sinh mã OTP Động theo ngày cho công trình (FE-03)
      */
     @PostMapping("/otp/generate")
     public ResponseEntity<DailySiteOtp> generateDailyOtp(@RequestBody GenerateOtpRequest request) {
@@ -51,16 +55,7 @@ public class AttendanceController {
     }
 
     /**
-     * Xác thực mã OTP điểm danh hiện trường (UC-08)
-     */
-    @PostMapping("/otp/verify")
-    public ResponseEntity<java.util.Map<String, Object>> verifyOtp(@RequestBody VerifyOtpRequest request) {
-        boolean valid = gpsAttendanceService.verifyDailyOtp(request.getProjectId(), request.getOtpCode());
-        return ResponseEntity.ok(java.util.Map.of("valid", valid, "message", valid ? "Mã OTP hợp lệ" : "Mã OTP không đúng hoặc đã hết hạn"));
-    }
-
-    /**
-     * Kỹ sư công trình Check-in bằng Mobile GPS Geofencing + Daily OTP (UC-07)
+     * Kỹ sư công trường Check-in bằng Mobile GPS Geofencing + Daily OTP
      */
     @PostMapping("/gps-checkin")
     public ResponseEntity<GpsCheckInResult> gpsCheckIn(@RequestBody GpsCheckInRequest request) {
@@ -69,11 +64,45 @@ public class AttendanceController {
     }
 
     /**
-     * Kỹ sư công trình Check-out kết thúc ca làm việc (UC-07)
+     * Kỹ sư công trường Check-out kết thúc ca làm việc
      */
     @PostMapping("/gps-checkout")
     public ResponseEntity<Attendance> gpsCheckOut(@RequestBody CheckOutRequest request) {
         Attendance att = gpsAttendanceService.checkOutWithGps(request.getEmployeeId(), request.getLatitude(), request.getLongitude());
         return ResponseEntity.ok(att);
+    }
+
+    /**
+     * Nạp log sinh trắc học từ máy chấm công ZKTeco / Kiosk FaceID (Khối Văn phòng)
+     */
+    @PostMapping("/biometric/ingest")
+    public ResponseEntity<String> ingestBiometricPunch(@RequestBody IngestBiometricRequest request) {
+        biometricAttendanceService.ingestBiometricLog(
+                request.getDeviceId(), request.getBiometricUserId(), request.getTimestamp(), request.getVerifyType());
+        return ResponseEntity.ok("Biometric log recorded successfully.");
+    }
+
+    /**
+     * Điểm danh Face ID trực tiếp qua Camera (Laptop Webcam trên Web Portal hoặc Smartphone Camera trên Mobile)
+     */
+    @PostMapping("/face-id/check-in")
+    public ResponseEntity<Attendance> faceIdCheckIn(@RequestBody com.hmcps.common.dto.FaceIdCheckInRequest request) {
+        Attendance att = biometricAttendanceService.checkInWithFaceIdAndGps(request);
+        return ResponseEntity.ok(att);
+    }
+
+    @Data
+    public static class VerifyOtpRequest {
+        private Long projectId;
+        private String otpCode;
+    }
+
+    /**
+     * Xác thực mã OTP điểm danh hiện trường
+     */
+    @PostMapping("/otp/verify")
+    public ResponseEntity<java.util.Map<String, Object>> verifyOtp(@RequestBody VerifyOtpRequest request) {
+        boolean valid = gpsAttendanceService.verifyDailyOtp(request.getProjectId(), request.getOtpCode());
+        return ResponseEntity.ok(java.util.Map.of("valid", valid, "message", valid ? "Mã OTP hợp lệ" : "Mã OTP không đúng hoặc đã hết hạn"));
     }
 }
