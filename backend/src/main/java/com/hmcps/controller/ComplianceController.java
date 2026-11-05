@@ -68,6 +68,12 @@ public class ComplianceController {
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     @PostMapping("/salary-grades")
     public ResponseEntity<SalaryGrade> saveSalaryGrade(@RequestBody SalaryGrade grade) {
+        if (grade.getMinSalary() != null && grade.getMinSalary().compareTo(new java.math.BigDecimal("5310000")) < 0) {
+            throw new IllegalArgumentException("Vi phạm Nghị định 74/2024/NĐ-CP: Mức lương tối thiểu bậc lương không được thấp hơn 5.310.000 VNĐ hoặc là số âm!");
+        }
+        if (grade.getMinSalary() != null && grade.getMaxSalary() != null && grade.getMaxSalary().compareTo(grade.getMinSalary()) < 0) {
+            throw new IllegalArgumentException("Mức lương tối đa của bậc lương không được nhỏ hơn mức lương tối thiểu!");
+        }
         return ResponseEntity.ok(salaryGradeRepository.save(grade));
     }
 }
