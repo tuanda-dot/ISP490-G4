@@ -1,16 +1,21 @@
 package com.hmcps.service;
 
 import com.hmcps.common.dto.ForceChangePasswordRequest;
+import com.hmcps.common.dto.ForgotPasswordRequest;
 import com.hmcps.common.dto.LoginRequest;
 import com.hmcps.common.dto.LoginResponse;
+import com.hmcps.common.dto.ResetPasswordRequest;
 import com.hmcps.common.enums.ContractStatus;
 import com.hmcps.common.exception.BusinessException;
 import com.hmcps.common.exception.InactiveContractException;
 import com.hmcps.entity.Employee;
+import com.hmcps.entity.PasswordResetToken;
 import com.hmcps.repository.ContractRepository;
 import com.hmcps.repository.EmployeeRepository;
+import com.hmcps.repository.PasswordResetTokenRepository;
 import com.hmcps.security.JwtTokenProvider;
 import com.hmcps.security.UserPrincipal;
+import com.hmcps.service.integration.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -18,22 +23,32 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final EmployeeRepository employeeRepository;
     private final ContractRepository contractRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
 
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
+        String normalizedEmail = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
         // 1. Xác thực Email
-        Employee employee = employeeRepository.findByEmail(request.getEmail())
+        Employee employee = employeeRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new BadCredentialsException("Email hoặc mật khẩu không chính xác."));
 
         // 2. Xác thực Mật khẩu
@@ -184,5 +199,94 @@ public class AuthService {
                 .role(normalizeRoleForFrontend(principal.getRole()))
                 .message("Làm mới token thành công.")
                 .build();
+    }
+
+    @Transactional
+    public Map<String, Object> forgotPassword(ForgotPasswordRequest request) {
+        String normalizedEmail = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
+        Employee employee = employeeRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new BusinessException("Không tìm thấy tài khoản nhân sự với email " + normalizedEmail + "."));
+
+        if (!"ACTIVE".equalsIgnoreCase(employee.getStatus())) {
+            throw new BusinessException("Tài khoản đã bị tạm khóa hoặc ngừng hoạt động. Vui lòng liên hệ Quản trị viên.");
+        }
+
+        List<PasswordResetToken> activeTokens = passwordResetTokenRepository.findByEmailIgnoreCaseAndUsedFalse(normalizedEmail);
+        if (!activeTokens.isEmpty()) {
+            activeTokens.forEach(token -> token.setUsed(true));
+            passwordResetTokenRepository.saveAll(activeTokens);
+        }
+
+        String otpCode = String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+                .employeeId(employee.getId())
+                .email(normalizedEmail)
+                .otpCode(otpCode)
+                .expiresAt(LocalDateTime.now().plusMinutes(5))
+                .used(false)
+                .build();
+        passwordResetTokenRepository.save(resetToken);
+
+        EmailService.EmailDispatchResult dispatch = emailService.sendPasswordResetOtpEmailWithResult(
+                normalizedEmail,
+                employee.getFullName(),
+                otpCode
+        );
+        if (!dispatch.success()) {
+            throw new BusinessException(
+                    "Không thể gửi email OTP qua SMTP (" + dispatch.errorMessage() + "). Vui lòng kiểm tra cấu hình MAIL_USERNAME/MAIL_PASSWORD."
+            );
+        }
+
+        boolean isSandbox = "EMAIL_SERVER_SANDBOX".equals(dispatch.channel());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("email", normalizedEmail);
+        payload.put("channel", dispatch.channel());
+        payload.put("expiresInMinutes", 5);
+        payload.put("message", isSandbox
+                ? "Đã tạo mã OTP khôi phục mật khẩu (chế độ Email Server Sandbox vì chưa cấu hình MAIL_PASSWORD SMTP)."
+                : "Đã gửi mã xác thực OTP 6 chữ số tới email " + normalizedEmail + ". Vui lòng kiểm tra hộp thư (hiệu lực 05 phút).");
+        if (isSandbox) {
+            payload.put("devOtpPreview", otpCode);
+        }
+        return payload;
+    }
+
+    @Transactional
+    public Map<String, Object> resetPassword(ResetPasswordRequest request) {
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new BusinessException("Xác nhận mật khẩu mới không trùng khớp.");
+        }
+
+        String normalizedEmail = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
+        String normalizedOtp = request.getOtpCode() != null ? request.getOtpCode().trim() : "";
+
+        PasswordResetToken token = passwordResetTokenRepository
+                .findTopByEmailIgnoreCaseAndOtpCodeAndUsedFalseOrderByCreatedAtDesc(normalizedEmail, normalizedOtp)
+                .orElseThrow(() -> new BusinessException("Mã OTP không chính xác hoặc đã được sử dụng."));
+
+        if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            token.setUsed(true);
+            passwordResetTokenRepository.save(token);
+            throw new BusinessException("Mã OTP đã hết hạn (quá 05 phút). Vui lòng yêu cầu gửi lại mã mới.");
+        }
+
+        Employee employee = employeeRepository.findById(token.getEmployeeId())
+                .or(() -> employeeRepository.findByEmail(normalizedEmail))
+                .orElseThrow(() -> new BusinessException("Không tìm thấy thông tin tài khoản nhân sự."));
+
+        employee.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        employee.setMustChangePassword(false);
+        employeeRepository.save(employee);
+
+        token.setUsed(true);
+        passwordResetTokenRepository.save(token);
+
+        log.info("Password reset completed via email OTP for {}", normalizedEmail);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("email", normalizedEmail);
+        payload.put("message", "Đặt lại mật khẩu thành công. Anh/Chị có thể đăng nhập bằng mật khẩu mới ngay bây giờ.");
+        return payload;
     }
 }

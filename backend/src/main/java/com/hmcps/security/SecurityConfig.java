@@ -41,13 +41,21 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(frame -> frame.disable()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
+                                "/",
+                                "/api/v1",
+                                "/api/v1/health",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh-token",
+                                "/api/v1/auth/forgot-password",
+                                "/api/v1/auth/reset-password",
                                 "/api/v1/integrations/vietqr/banks",
+                                "/api/attendance/otp/**",
+                                "/api/compliance/bf10-state",
                                 "/h2-console/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
-                                "/actuator/**"
+                                "/actuator/**",
+                                "/error"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
