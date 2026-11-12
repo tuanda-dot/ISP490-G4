@@ -23,7 +23,7 @@ import java.util.Map;
  * Cung cấp số liệu phân tích tài chính đa chiều cho Ban Giám đốc và Kế toán trưởng
  */
 @RestController
-@RequestMapping("/api/dashboard")
+@RequestMapping
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 public class DashboardController {
@@ -32,6 +32,21 @@ public class DashboardController {
     private final ProjectCostAllocationRepository costAllocationRepository;
     private final EmployeeRepository employeeRepository;
     private final ProjectRepository projectRepository;
+
+    @GetMapping({"/", "/api/v1", "/api/v1/health"})
+    public ResponseEntity<Map<String, Object>> getApiRootStatus() {
+        Map<String, Object> status = new HashMap<>();
+        status.put("status", "UP");
+        status.put("system", "HMCPS - Hệ Thống Quản Lý Tiền Lương & Nhân Sự Xây Dựng Hải Minh (Backend REST API)");
+        status.put("frontendWebAppUrl", "http://localhost:5173");
+        status.put("swaggerDocsUrl", "http://localhost:8080/swagger-ui/index.html");
+        status.put("h2ConsoleUrl", "http://localhost:8080/h2-console");
+        status.put("h2JdbcUrl", "jdbc:h2:file:./target/hmcps_dev_db");
+        status.put("h2Username", "sa");
+        status.put("h2Password", "(để trống)");
+        status.put("totalEmployees", employeeRepository.count());
+        return ResponseEntity.ok(status);
+    }
 
     @Data
     @Builder
@@ -46,7 +61,7 @@ public class DashboardController {
         private boolean isBalanced;
     }
 
-    @GetMapping("/executive")
+    @GetMapping("/api/dashboard/executive")
     public ResponseEntity<ExecutiveDashboardResponse> getExecutiveDashboard(
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year) {
