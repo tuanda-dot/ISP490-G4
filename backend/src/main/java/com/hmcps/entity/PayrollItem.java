@@ -71,6 +71,26 @@ public class PayrollItem {
     @Column(precision = 5, scale = 2, nullable = false)
     private BigDecimal congTinhCom; // Công đi làm thực tế để tính suất cơm 40k/ngày
 
+    @Column(precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal ngayCongHuongPhuCap = BigDecimal.ZERO; // Ngày công hưởng phụ cấp (Mẫu Phiếu lương Hải Minh)
+
+    @Column(precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal ngayCongCongTac = BigDecimal.ZERO; // Ngày công hưởng phụ cấp công tác (CT)
+
+    @Column(precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal ngayNghiPhep = BigDecimal.ZERO;
+
+    @Column(precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal ngayNghiLe = BigDecimal.ZERO;
+
+    @Column(precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal ngayNghiKhongLuong = BigDecimal.ZERO;
+
     @Column(precision = 6, scale = 2, nullable = false)
     @Builder.Default
     private BigDecimal overtimeHours = BigDecimal.ZERO; // Giờ làm thêm (OT)
@@ -102,6 +122,23 @@ public class PayrollItem {
     @Column(precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal phuCapThamNien = BigDecimal.ZERO; // Phụ cấp thâm niên (Office Staff tính BHXH)
+
+    // Lương hiệu quả công việc & Xếp loại đánh giá (Mẫu Phieu luong.xlsx Hải Minh)
+    @Column(precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal luongHieuQuaKhoan = BigDecimal.ZERO;
+
+    @Column(length = 10)
+    @Builder.Default
+    private String xepLoaiDanhGia = "A";
+
+    @Column(precision = 5, scale = 4)
+    @Builder.Default
+    private BigDecimal tyLeHieuQua = BigDecimal.ONE;
+
+    @Column(precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal luongHieuQuaThucHuong = BigDecimal.ZERO;
 
     // ================= KHỐI D: PHỤ CẤP LƯU ĐỘNG / CÔNG TRƯỜNG =================
     @Column(precision = 15, scale = 2)
@@ -143,6 +180,22 @@ public class PayrollItem {
     @Column(precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal thuongDuAn = BigDecimal.ZERO; // Thưởng hoàn thành mốc dự án
+
+    @Column(precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal phuCapCongTac = BigDecimal.ZERO; // Phụ cấp công tác (CT)
+
+    @Column(precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal hoanThueTncn = BigDecimal.ZERO; // Hoàn thuế TNCN
+
+    @Column(precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal thuNhapKhac = BigDecimal.ZERO; // Các khoản thu nhập / thưởng khác
+
+    @Column(precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal truyThuThueTncn = BigDecimal.ZERO; // Truy thu thuế TNCN
 
     @Column(precision = 15, scale = 2, nullable = false)
     private BigDecimal tongThuNhap; // TỔNG THU NHẬP GROSS
