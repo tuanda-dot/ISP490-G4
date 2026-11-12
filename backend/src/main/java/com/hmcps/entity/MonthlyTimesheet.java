@@ -75,6 +75,32 @@ public class MonthlyTimesheet {
     @Builder.Default
     private BigDecimal unpaidLeaveDays = BigDecimal.ZERO;
 
+    // Bổ sung chỉ số chuẩn Bảng chấm công VP HN T10-2025 (BANG CC VP HN T10-2025.xlsx)
+    @Column(precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal allowanceWorkDays = BigDecimal.ZERO; // Ngày công hưởng phụ cấp (thực tế đi làm + công tác)
+
+    @Column(precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal businessTripDays = BigDecimal.ZERO; // Ngày công đi công tác (CT / 0.5CT)
+
+    @Column(precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal holidayLeaveDays = BigDecimal.ZERO; // Ngày nghỉ lễ hưởng lương (NL / 0.5NL)
+
+    @Column(precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal regimeLeaveDays = BigDecimal.ZERO; // Ngày nghỉ chế độ cưới/tang (CĐ / 0.5CĐ)
+
+    @Builder.Default
+    private Integer lateEarlyCount = 0; // Số lần đi muộn / về sớm
+
+    @Builder.Default
+    private Integer explainedCount = 0; // Số lần đã giải trình hợp lệ (tím)
+
+    @Builder.Default
+    private Integer missingPunchCount = 0; // Số lần không chấm công Vào/Ra (đỏ)
+
     // Trạng thái phê duyệt 2 cấp: DRAFT -> CONFIRMED (Site Manager) -> LOCKED (HR Manager)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
