@@ -49,8 +49,18 @@ public class AttendanceController {
      * Chỉ huy trưởng (Site Manager) sinh mã OTP Động theo ngày cho công trình (FE-03)
      */
     @PostMapping("/otp/generate")
-    public ResponseEntity<DailySiteOtp> generateDailyOtp(@RequestBody GenerateOtpRequest request) {
-        DailySiteOtp otp = gpsAttendanceService.generateDailySiteOtp(request.getProjectId(), request.getSiteManagerId());
+    public ResponseEntity<DailySiteOtp> generateDailyOtp(
+            @RequestBody(required = false) GenerateOtpRequest request,
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) Long siteManagerId,
+            @RequestParam(required = false) Long managerId) {
+        Long resolvedProjectId = request != null && request.getProjectId() != null
+                ? request.getProjectId()
+                : (projectId != null ? projectId : 1L);
+        Long resolvedManagerId = request != null && request.getSiteManagerId() != null
+                ? request.getSiteManagerId()
+                : (siteManagerId != null ? siteManagerId : (managerId != null ? managerId : 5L));
+        DailySiteOtp otp = gpsAttendanceService.generateDailySiteOtp(resolvedProjectId, resolvedManagerId);
         return ResponseEntity.ok(otp);
     }
 
@@ -104,5 +114,15 @@ public class AttendanceController {
     public ResponseEntity<java.util.Map<String, Object>> verifyOtp(@RequestBody VerifyOtpRequest request) {
         boolean valid = gpsAttendanceService.verifyDailyOtp(request.getProjectId(), request.getOtpCode());
         return ResponseEntity.ok(java.util.Map.of("valid", valid, "message", valid ? "Mã OTP hợp lệ" : "Mã OTP không đúng hoặc đã hết hạn"));
+    }
+
+    /**
+     * Lấy mã OTP hiện hành của công trình
+     */
+    @GetMapping("/otp/active/{projectId}")
+    public ResponseEntity<DailySiteOtp> getActiveOtp(@PathVariable Long projectId) {
+        return gpsAttendanceService.getActiveDailyOtp(projectId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }
