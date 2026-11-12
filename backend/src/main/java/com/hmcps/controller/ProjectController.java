@@ -48,13 +48,13 @@ public class ProjectController {
 
     @PostMapping
     public ResponseEntity<Project> createProject(@RequestBody Project project) {
-        if (project.getGeofenceRadiusMeters() != null && (project.getGeofenceRadiusMeters() < 50 || project.getGeofenceRadiusMeters() > 2000)) {
-            throw new IllegalArgumentException("Bán kính Geofence công trường phải nằm trong khoảng từ 50m đến 2.000m (không được là số âm)!");
+        if (project.getGeofenceRadiusMeters() != null && (project.getGeofenceRadiusMeters() < 50 || project.getGeofenceRadiusMeters() > 5000)) {
+            throw new IllegalArgumentException("Bán kính Geofence công trường phải nằm trong khoảng từ 50m đến 5.000m (không được là số âm)!");
         }
-        if (project.getLatitude() != null && (project.getLatitude() < -90 || project.getLatitude() > 90)) {
+        if (project.getLatitude() != null && (project.getLatitude().doubleValue() < -90.0 || project.getLatitude().doubleValue() > 90.0)) {
             throw new IllegalArgumentException("Vĩ độ (Latitude) phải nằm trong khoảng [-90, 90]!");
         }
-        if (project.getLongitude() != null && (project.getLongitude() < -180 || project.getLongitude() > 180)) {
+        if (project.getLongitude() != null && (project.getLongitude().doubleValue() < -180.0 || project.getLongitude().doubleValue() > 180.0)) {
             throw new IllegalArgumentException("Kinh độ (Longitude) phải nằm trong khoảng [-180, 180]!");
         }
         if (project.getStartDate() != null && project.getEndDate() != null && project.getEndDate().isBefore(project.getStartDate())) {
@@ -69,13 +69,13 @@ public class ProjectController {
         Project proj = projectRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dự án với ID: " + id));
 
-        if (request.getGeofenceRadiusMeters() != null && (request.getGeofenceRadiusMeters() < 50 || request.getGeofenceRadiusMeters() > 2000)) {
-            throw new IllegalArgumentException("Bán kính Geofence công trường phải nằm trong khoảng từ 50m đến 2.000m (không được là số âm)!");
+        if (request.getGeofenceRadiusMeters() != null && (request.getGeofenceRadiusMeters() < 50 || request.getGeofenceRadiusMeters() > 5000)) {
+            throw new IllegalArgumentException("Bán kính Geofence công trường phải nằm trong khoảng từ 50m đến 5.000m (không được là số âm)!");
         }
-        if (request.getLatitude() != null && (request.getLatitude() < -90 || request.getLatitude() > 90)) {
+        if (request.getLatitude() != null && (request.getLatitude().doubleValue() < -90.0 || request.getLatitude().doubleValue() > 90.0)) {
             throw new IllegalArgumentException("Vĩ độ (Latitude) phải nằm trong khoảng [-90, 90]!");
         }
-        if (request.getLongitude() != null && (request.getLongitude() < -180 || request.getLongitude() > 180)) {
+        if (request.getLongitude() != null && (request.getLongitude().doubleValue() < -180.0 || request.getLongitude().doubleValue() > 180.0)) {
             throw new IllegalArgumentException("Kinh độ (Longitude) phải nằm trong khoảng [-180, 180]!");
         }
         if (request.getStartDate() != null && request.getEndDate() != null && request.getEndDate().isBefore(request.getStartDate())) {
