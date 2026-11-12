@@ -15,6 +15,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.io.File;
 
 /**
  * Lõi tính toán lương (Payroll Engine) - HMCPS (FE-06)
@@ -40,6 +42,70 @@ public class PayrollEngineService {
     private final MonthlyTimesheetRepository timesheetRepository;
     private final EngineerAssignmentRepository assignmentRepository;
 
+    private static final File BF10_STATE_FILE = new File("./target/hmcps_bf10_state.json");
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    @Data
+    @Builder
+    public static class ProjectAllowanceSnapshot {
+        private BigDecimal siteLodging;
+        private BigDecimal hazard;
+        private BigDecimal projectResponsibility;
+    }
+
+    /**
+     * Bóc tách phụ cấp công trường động từ Cấu hình BF-10 (theo Dự án & theo Từng Kỹ sư)
+     */
+    public ProjectAllowanceSnapshot resolveProjectAllowances(Employee emp) {
+        if (emp == null || emp.getEmployeeType() == EmployeeType.OFFICE_STAFF) {
+            return ProjectAllowanceSnapshot.builder()
+                    .siteLodging(BigDecimal.ZERO)
+                    .hazard(BigDecimal.ZERO)
+                    .projectResponsibility(BigDecimal.ZERO)
+                    .build();
+        }
+
+        // Đọc cấu hình phụ cấp công trường từ state BF-10
+        if (BF10_STATE_FILE.exists()) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(BF10_STATE_FILE);
+                com.fasterxml.jackson.databind.JsonNode projectAllowances = root.path("projectAllowances");
+                if (projectAllowances.isObject()) {
+                    java.util.Iterator<Map.Entry<String, com.fasterxml.jackson.databind.JsonNode>> fields = projectAllowances.fields();
+                    while (fields.hasNext()) {
+                        Map.Entry<String, com.fasterxml.jackson.databind.JsonNode> entry = fields.next();
+                        com.fasterxml.jackson.databind.JsonNode projNode = entry.getValue();
+                        com.fasterxml.jackson.databind.JsonNode engineers = projNode.path("engineers");
+                        if (engineers.isArray()) {
+                            for (com.fasterxml.jackson.databind.JsonNode engNode : engineers) {
+                                String code = engNode.path("code").asText();
+                                if (emp.getEmployeeCode() != null && emp.getEmployeeCode().equalsIgnoreCase(code)) {
+                                    BigDecimal lodging = engNode.has("customLodging") ? new BigDecimal(engNode.path("customLodging").asText("0")) : BigDecimal.ZERO;
+                                    BigDecimal hazard = engNode.has("customHazard") ? new BigDecimal(engNode.path("customHazard").asText("0")) : BigDecimal.ZERO;
+                                    BigDecimal resp = engNode.has("customResp") ? new BigDecimal(engNode.path("customResp").asText("0")) : BigDecimal.ZERO;
+                                    return ProjectAllowanceSnapshot.builder()
+                                            .siteLodging(lodging)
+                                            .hazard(hazard)
+                                            .projectResponsibility(resp)
+                                            .build();
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        // Fallback mặc định theo định mức xây lắp nếu chưa thiết lập riêng
+        boolean isSiteManager = emp.getPosition() != null && emp.getPosition().toLowerCase().contains("chỉ huy trưởng");
+        return ProjectAllowanceSnapshot.builder()
+                .siteLodging(new BigDecimal("3000000"))
+                .hazard(new BigDecimal("1500000"))
+                .projectResponsibility(isSiteManager ? new BigDecimal("2000000") : new BigDecimal("500000"))
+                .build();
+    }
+
     /**
      * DTO truyền đầu vào cho Engine tính lương của 1 nhân viên
      */
@@ -59,6 +125,18 @@ public class PayrollEngineService {
         private BigDecimal phuCapDocHai;
         private BigDecimal phuCapTrachNhiem;
         private BigDecimal thuongDuAn;
+
+        // Các trường mở rộng theo Phiếu lương & Bảng công thực tế Hải Minh (Phieu luong.xlsx)
+        private BigDecimal luongHieuQua;
+        private String xepLoaiDanhGia;
+        private BigDecimal tyLeHieuQua;
+        private BigDecimal phuCapCongTac;
+        private BigDecimal ngayCongHuongPhuCap;
+        private BigDecimal ngayCongCongTac;
+        private BigDecimal hoanThueTncn;
+        private BigDecimal thuNhapKhac;
+        private BigDecimal truyThuThueTncn;
+        private Boolean haiMinhStandardMode;
     }
 
     /**
@@ -77,46 +155,133 @@ public class PayrollEngineService {
         BigDecimal congTinhCom = ts.getMealWorkDays() != null ? ts.getMealWorkDays() : (congChinhThuc.add(congThuViec));
         BigDecimal overtimeHours = ts.getOvertimeHours() != null ? ts.getOvertimeHours() : BigDecimal.ZERO;
         BigDecimal nightHours = ts.getNightHours() != null ? ts.getNightHours() : BigDecimal.ZERO;
+        BigDecimal ngayNghiPhep = ts.getPaidLeaveDays() != null ? ts.getPaidLeaveDays() : BigDecimal.ZERO;
+        BigDecimal ngayNghiLe = ts.getHolidayLeaveDays() != null ? ts.getHolidayLeaveDays() : BigDecimal.ZERO;
+        BigDecimal ngayNghiKhongLuong = ts.getUnpaidLeaveDays() != null ? ts.getUnpaidLeaveDays() : BigDecimal.ZERO;
+        BigDecimal totalActualDays = congChinhThuc.add(congThuViec);
+        BigDecimal ngayCongHuongPhuCap = input.getNgayCongHuongPhuCap() != null
+                ? input.getNgayCongHuongPhuCap()
+                : (ts.getAllowanceWorkDays() != null && ts.getAllowanceWorkDays().compareTo(BigDecimal.ZERO) > 0
+                        ? ts.getAllowanceWorkDays() : totalActualDays);
+        BigDecimal ngayCongCongTac = input.getNgayCongCongTac() != null
+                ? input.getNgayCongCongTac()
+                : (ts.getBusinessTripDays() != null ? ts.getBusinessTripDays() : BigDecimal.ZERO);
 
-        // 2. KHỐI C: Mức lương & phụ cấp tính lương T13
+        boolean isHaiMinhMode = Boolean.TRUE.equals(input.getHaiMinhStandardMode())
+                || input.getLuongHieuQua() != null
+                || emp.getPerformanceSalary() != null;
+
+        // 2. KHỐI C: Mức lương & phụ cấp tính lương T13 / Lương hiệu quả công việc
         BigDecimal mucLuong = contract.getBaseSalary();
         BigDecimal heSoNangSuat = input.getHeSoNangSuat() != null ? input.getHeSoNangSuat() : BigDecimal.ONE;
         // Trợ cấp lương chính = Lương chính x Hệ số năng suất (theo quy chế HRM)
-        BigDecimal phuCapLuong = mucLuong.multiply(heSoNangSuat).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal troCapThuViec = congThuViec.compareTo(BigDecimal.ZERO) > 0 ? phuCapLuong : BigDecimal.ZERO;
-        BigDecimal phuCapChucVu = input.getPhuCapChucVu() != null ? input.getPhuCapChucVu() : BigDecimal.ZERO;
-        BigDecimal phuCapThamNien = input.getPhuCapThamNien() != null ? input.getPhuCapThamNien() : BigDecimal.ZERO;
+        BigDecimal phuCapLuong = isHaiMinhMode
+                ? BigDecimal.ZERO
+                : mucLuong.multiply(heSoNangSuat).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal troCapThuViec = (!isHaiMinhMode && congThuViec.compareTo(BigDecimal.ZERO) > 0) ? phuCapLuong : BigDecimal.ZERO;
+        BigDecimal phuCapChucVu = input.getPhuCapChucVu() != null ? input.getPhuCapChucVu()
+                : (emp.getPositionAllowance() != null ? emp.getPositionAllowance() : BigDecimal.ZERO);
+        BigDecimal phuCapThamNien = input.getPhuCapThamNien() != null ? input.getPhuCapThamNien()
+                : (emp.getSeniorityAllowance() != null ? emp.getSeniorityAllowance() : BigDecimal.ZERO);
 
-        // 3. KHỐI D: Phụ cấp lưu động / công trường
-        // Cơm = số công thực tế x 40.000đ/ngày
-        BigDecimal phuCapCom = input.getPhuCapCom() != null && input.getPhuCapCom().compareTo(BigDecimal.ZERO) > 0
-                ? input.getPhuCapCom()
-                : congTinhCom.multiply(LaborLawConstants.MEAL_ALLOWANCE_PER_DAY);
-        BigDecimal phuCapXangXe = input.getPhuCapXangXe() != null ? input.getPhuCapXangXe() : LaborLawConstants.FUEL_ALLOWANCE_DEFAULT;
-        BigDecimal phuCapDienThoai = input.getPhuCapDienThoai() != null ? input.getPhuCapDienThoai() : LaborLawConstants.PHONE_ALLOWANCE_DEFAULT;
+        BigDecimal luongHieuQuaKhoan = input.getLuongHieuQua() != null
+                ? input.getLuongHieuQua()
+                : (emp.getPerformanceSalary() != null ? emp.getPerformanceSalary() : BigDecimal.ZERO);
+        String xepLoaiDanhGia = input.getXepLoaiDanhGia() != null
+                ? input.getXepLoaiDanhGia()
+                : (emp.getEvaluationGrade() != null ? emp.getEvaluationGrade() : "A");
+        BigDecimal tyLeHieuQua = input.getTyLeHieuQua() != null
+                ? input.getTyLeHieuQua()
+                : (emp.getEvaluationPct() != null ? emp.getEvaluationPct() : BigDecimal.ONE);
+        BigDecimal luongHieuQuaThucHuong = BigDecimal.ZERO;
+
+        // 3. KHỐI D: Phụ cấp lưu động / công trường / văn phòng
+        BigDecimal phuCapCom;
+        BigDecimal phuCapXangXe;
+        BigDecimal phuCapDienThoai;
         BigDecimal phuCapLuuTru = input.getPhuCapLuuTru() != null ? input.getPhuCapLuuTru() : BigDecimal.ZERO;
         BigDecimal phuCapDocHai = input.getPhuCapDocHai() != null ? input.getPhuCapDocHai() : BigDecimal.ZERO;
         BigDecimal phuCapTrachNhiem = input.getPhuCapTrachNhiem() != null ? input.getPhuCapTrachNhiem() : BigDecimal.ZERO;
+        BigDecimal phuCapCongTac = input.getPhuCapCongTac() != null
+                ? input.getPhuCapCongTac()
+                : ngayCongCongTac.multiply(LaborLawConstants.BUSINESS_TRIP_ALLOWANCE_PER_DAY);
+        BigDecimal hoanThueTncn = input.getHoanThueTncn() != null ? input.getHoanThueTncn() : BigDecimal.ZERO;
+        BigDecimal thuNhapKhac = input.getThuNhapKhac() != null ? input.getThuNhapKhac() : BigDecimal.ZERO;
+        BigDecimal truyThuThueTncn = input.getTruyThuThueTncn() != null ? input.getTruyThuThueTncn() : BigDecimal.ZERO;
 
         // 4. KHỐI E: Thu nhập & Tổng thu nhập (GROSS)
-        // Tổng các khoản phụ cấp nền chia theo công
-        BigDecimal totalFixedBase = mucLuong.add(phuCapLuong)
-                .add(phuCapChucVu)
-                .add(phuCapThamNien)
-                .add(phuCapXangXe)
-                .add(phuCapDienThoai)
-                .add(phuCapLuuTru)
-                .add(phuCapDocHai)
-                .add(phuCapTrachNhiem);
+        BigDecimal thuNhapChinh;
+        if (isHaiMinhMode) {
+            // Công thức chuẩn Phiếu lương thực tế Hải Minh (Phieu luong.xlsx):
+            BigDecimal luongCoBanThucHuong = congChuan.compareTo(BigDecimal.ZERO) > 0
+                    ? mucLuong.multiply(totalActualDays).divide(congChuan, 0, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            luongHieuQuaThucHuong = congChuan.compareTo(BigDecimal.ZERO) > 0
+                    ? luongHieuQuaKhoan.multiply(totalActualDays).multiply(tyLeHieuQua).divide(congChuan, 0, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
 
-        // Proration theo ngày công thực tế
-        BigDecimal totalActualDays = congChinhThuc.add(congThuViec);
-        BigDecimal thuNhapChinh = congChuan.compareTo(BigDecimal.ZERO) > 0
-                ? totalFixedBase.divide(congChuan, 6, RoundingMode.HALF_UP)
-                        .multiply(totalActualDays)
-                        .add(phuCapCom)
-                        .setScale(2, RoundingMode.HALF_UP)
-                : phuCapCom;
+            BigDecimal mealPkg = input.getPhuCapCom() != null ? input.getPhuCapCom()
+                    : (emp.getMealPackage() != null ? emp.getMealPackage() : LaborLawConstants.OFFICE_MEAL_PACKAGE_DEFAULT);
+            BigDecimal fuelPkg = input.getPhuCapXangXe() != null ? input.getPhuCapXangXe()
+                    : (emp.getFuelPackage() != null ? emp.getFuelPackage() : LaborLawConstants.OFFICE_FUEL_PACKAGE_DEFAULT);
+            BigDecimal phonePkg = input.getPhuCapDienThoai() != null ? input.getPhuCapDienThoai()
+                    : (emp.getPhonePackage() != null ? emp.getPhonePackage() : LaborLawConstants.OFFICE_PHONE_PACKAGE_DEFAULT);
+
+            phuCapCom = congChuan.compareTo(BigDecimal.ZERO) > 0
+                    ? mealPkg.multiply(ngayCongHuongPhuCap).divide(congChuan, 0, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            phuCapXangXe = congChuan.compareTo(BigDecimal.ZERO) > 0
+                    ? fuelPkg.multiply(ngayCongHuongPhuCap).divide(congChuan, 0, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            phuCapDienThoai = congChuan.compareTo(BigDecimal.ZERO) > 0
+                    ? phonePkg.multiply(ngayCongHuongPhuCap).divide(congChuan, 0, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            BigDecimal posProrated = congChuan.compareTo(BigDecimal.ZERO) > 0
+                    ? phuCapChucVu.multiply(totalActualDays).divide(congChuan, 0, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            BigDecimal senProrated = congChuan.compareTo(BigDecimal.ZERO) > 0
+                    ? phuCapThamNien.multiply(totalActualDays).divide(congChuan, 0, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            thuNhapChinh = luongCoBanThucHuong
+                    .add(luongHieuQuaThucHuong)
+                    .add(phuCapCom)
+                    .add(phuCapXangXe)
+                    .add(phuCapDienThoai)
+                    .add(phuCapCongTac)
+                    .add(posProrated)
+                    .add(senProrated)
+                    .add(phuCapLuuTru)
+                    .add(phuCapDocHai)
+                    .add(phuCapTrachNhiem)
+                    .setScale(0, RoundingMode.HALF_UP);
+        } else {
+            // Cơm = số công thực tế x 40.000đ/ngày
+            phuCapCom = input.getPhuCapCom() != null && input.getPhuCapCom().compareTo(BigDecimal.ZERO) > 0
+                    ? input.getPhuCapCom()
+                    : congTinhCom.multiply(LaborLawConstants.MEAL_ALLOWANCE_PER_DAY);
+            phuCapXangXe = input.getPhuCapXangXe() != null ? input.getPhuCapXangXe() : LaborLawConstants.FUEL_ALLOWANCE_DEFAULT;
+            phuCapDienThoai = input.getPhuCapDienThoai() != null ? input.getPhuCapDienThoai() : LaborLawConstants.PHONE_ALLOWANCE_DEFAULT;
+
+            // Tổng các khoản phụ cấp nền chia theo công
+            BigDecimal totalFixedBase = mucLuong.add(phuCapLuong)
+                    .add(phuCapChucVu)
+                    .add(phuCapThamNien)
+                    .add(phuCapXangXe)
+                    .add(phuCapDienThoai)
+                    .add(phuCapLuuTru)
+                    .add(phuCapDocHai)
+                    .add(phuCapTrachNhiem);
+
+            // Proration theo ngày công thực tế
+            thuNhapChinh = congChuan.compareTo(BigDecimal.ZERO) > 0
+                    ? totalFixedBase.divide(congChuan, 6, RoundingMode.HALF_UP)
+                            .multiply(totalActualDays)
+                            .add(phuCapCom)
+                            .setScale(2, RoundingMode.HALF_UP)
+                    : phuCapCom;
+        }
 
         // Tiền lương làm thêm giờ (OT) - Đ.98.1 BLLĐ
         // Đơn giá lương giờ chuẩn = mucLuong / (congChuan x 8)
@@ -133,7 +298,8 @@ public class PayrollEngineService {
         BigDecimal phuTroiDemMienThue = phuTroiDem; // Toàn bộ phần trả cao hơn do làm đêm được miễn thuế
 
         BigDecimal thuongDuAn = input.getThuongDuAn() != null ? input.getThuongDuAn() : BigDecimal.ZERO;
-        BigDecimal tongThuNhap = thuNhapChinh.add(luongTangCa).add(phuTroiDem).add(thuongDuAn).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal rawTongThuNhap = thuNhapChinh.add(luongTangCa).add(phuTroiDem).add(thuongDuAn).add(hoanThueTncn).add(thuNhapKhac);
+        BigDecimal tongThuNhap = isHaiMinhMode ? rawTongThuNhap.setScale(0, RoundingMode.HALF_UP) : rawTongThuNhap.setScale(2, RoundingMode.HALF_UP);
 
         // 5. KHỐI F: Trích nộp Bảo hiểm (VĂN PHÒNG vs KỸ SƯ CÔNG TRƯỜNG)
         BigDecimal insuranceBase = BigDecimal.ZERO;
@@ -162,9 +328,17 @@ public class PayrollEngineService {
             }
 
             // Prorate nền đóng bảo hiểm theo ngày công thực tế / công chuẩn
-            BigDecimal proratedBase = congChuan.compareTo(BigDecimal.ZERO) > 0
-                    ? rawBase.divide(congChuan, 6, RoundingMode.HALF_UP).multiply(congTinhCom).setScale(2, RoundingMode.HALF_UP)
-                    : rawBase;
+            // Theo Phiếu lương Hải Minh (Phieu luong.xlsx: =10.5%*D13) & Luật BHXH: nghỉ không lương < 14 ngày đóng đủ 100% nền BHXH
+            BigDecimal unpaidDaysForBh = congChuan.subtract(totalActualDays);
+            BigDecimal proratedBase;
+            if (isHaiMinhMode) {
+                proratedBase = (totalActualDays.compareTo(BigDecimal.ZERO) > 0 && unpaidDaysForBh.compareTo(new BigDecimal("14")) < 0)
+                        ? rawBase : BigDecimal.ZERO;
+            } else {
+                proratedBase = congChuan.compareTo(BigDecimal.ZERO) > 0
+                        ? rawBase.divide(congChuan, 6, RoundingMode.HALF_UP).multiply(congTinhCom).setScale(2, RoundingMode.HALF_UP)
+                        : rawBase;
+            }
 
             BigDecimal bhxhCap = complianceService.getBhxhCap();
             BigDecimal bhtnCap = complianceService.getBhtnCap();
@@ -212,8 +386,9 @@ public class PayrollEngineService {
         BigDecimal mealCap = complianceService.getMealExemptThreshold();
         BigDecimal comMienThue = phuCapCom.compareTo(mealCap) > 0 ? mealCap : phuCapCom;
 
-        // Các khoản miễn thuế hợp lý: Điện thoại khoán, Lưu trú công trường, Độc hại hiện trường, Chênh lệch OT, Phụ trội đêm
-        BigDecimal exemptAllowances = phuCapDienThoai.add(phuCapLuuTru).add(phuCapDocHai).add(comMienThue).add(chenhLechLtg).add(phuTroiDemMienThue);
+        // Các khoản miễn thuế hợp lý: Điện thoại khoán, Lưu trú công trường, Độc hại hiện trường, Công tác phí, Hoàn thuế TNCN, Chênh lệch OT, Phụ trội đêm
+        BigDecimal exemptAllowances = phuCapDienThoai.add(phuCapLuuTru).add(phuCapDocHai).add(phuCapCongTac)
+                .add(hoanThueTncn).add(comMienThue).add(chenhLechLtg).add(phuTroiDemMienThue);
 
         // Thu nhập chịu thuế (TNCT)
         BigDecimal tnct = tongThuNhap.subtract(exemptAllowances);
@@ -254,13 +429,15 @@ public class PayrollEngineService {
             phiCongDoanVien = phiCongDoanVien.setScale(2, RoundingMode.HALF_UP);
         }
 
-        // THỰC NHẬN = Tổng thu nhập - BH NLĐ - Thuế TNCN - Phí công đoàn viên
-        BigDecimal rawThucNhan = tongThuNhap.subtract(congBhNld).subtract(thueTncn).subtract(phiCongDoanVien);
+        // THỰC NHẬN = Tổng thu nhập - BH NLĐ - Thuế TNCN - Phí công đoàn viên - Truy thu thuế TNCN
+        BigDecimal rawThucNhan = tongThuNhap.subtract(congBhNld).subtract(thueTncn).subtract(phiCongDoanVien).subtract(truyThuThueTncn);
         if (rawThucNhan.compareTo(BigDecimal.ZERO) < 0) {
             rawThucNhan = BigDecimal.ZERO;
         }
-        // Làm tròn đến hàng nghìn đồng theo chuẩn kế toán Việt Nam (ROUND(x, -3))
-        BigDecimal thucNhan = PayrollRoundingUtils.roundToThousand(rawThucNhan);
+        // Làm tròn đến hàng nghìn đồng theo chuẩn kế toán Việt Nam (ROUND(x, -3)), hoặc tròn đơn vị đồng theo Phiếu lương Hải Minh
+        BigDecimal thucNhan = isHaiMinhMode
+                ? rawThucNhan.setScale(0, RoundingMode.HALF_UP)
+                : PayrollRoundingUtils.roundToThousand(rawThucNhan);
 
         return PayrollItem.builder()
                 .payrollId(payrollId)
@@ -275,11 +452,20 @@ public class PayrollEngineService {
                 .congChinhThuc(congChinhThuc)
                 .congThuViec(congThuViec)
                 .congTinhCom(congTinhCom)
+                .ngayCongHuongPhuCap(ngayCongHuongPhuCap)
+                .ngayCongCongTac(ngayCongCongTac)
+                .ngayNghiPhep(ngayNghiPhep)
+                .ngayNghiLe(ngayNghiLe)
+                .ngayNghiKhongLuong(ngayNghiKhongLuong)
                 .overtimeHours(overtimeHours)
                 .nightHours(nightHours)
                 .mucLuong(mucLuong)
                 .heSoNangSuat(heSoNangSuat)
                 .phuCapLuong(phuCapLuong)
+                .luongHieuQuaKhoan(luongHieuQuaKhoan)
+                .xepLoaiDanhGia(xepLoaiDanhGia)
+                .tyLeHieuQua(tyLeHieuQua)
+                .luongHieuQuaThucHuong(luongHieuQuaThucHuong)
                 .troCapThuViec(troCapThuViec)
                 .phuCapChucVu(phuCapChucVu)
                 .phuCapThamNien(phuCapThamNien)
@@ -289,10 +475,14 @@ public class PayrollEngineService {
                 .phuCapLuuTru(phuCapLuuTru)
                 .phuCapDocHai(phuCapDocHai)
                 .phuCapTrachNhiem(phuCapTrachNhiem)
+                .phuCapCongTac(phuCapCongTac)
                 .thuNhap(thuNhapChinh)
                 .luongTangCa(luongTangCa)
                 .phuTroiDem(phuTroiDem)
                 .thuongDuAn(thuongDuAn)
+                .hoanThueTncn(hoanThueTncn)
+                .thuNhapKhac(thuNhapKhac)
+                .truyThuThueTncn(truyThuThueTncn)
                 .tongThuNhap(tongThuNhap)
                 .insuranceBase(insuranceBase)
                 .bhxhNld(bhxhNld)
@@ -371,7 +561,7 @@ public class PayrollEngineService {
         }
 
         // Bậc 6: 52tr - 80tr -> 30% (28tr x 30% = 8.4tr)
-        BigDecimal b6 = new BigDecimal("8000000");
+        BigDecimal b6 = new BigDecimal("80000000");
         if (income.compareTo(b6) > 0) {
             tax = tax.add(new BigDecimal("28000000").multiply(new BigDecimal("0.30")));
         } else {
@@ -409,11 +599,14 @@ public class PayrollEngineService {
             payrollItemRepository.flush();
         }
 
-        // Lấy tất cả bảng chấm công tháng đã LOCKED
+        // Lấy tất cả bảng chấm công tháng đã LOCKED (BF-08 Step 2: Tích hợp dữ liệu nguồn Bảng công đã khóa)
         List<MonthlyTimesheet> timesheets = timesheetRepository.findByMonthAndYearAndStatus(month, year, TimesheetStatus.LOCKED);
         if (timesheets.isEmpty()) {
-            // Nếu chưa có ai locked thì lấy danh sách hiện có để tính nháp
-            timesheets = timesheetRepository.findByMonthAndYear(month, year);
+            List<MonthlyTimesheet> allTs = timesheetRepository.findByMonthAndYear(month, year);
+            if (!allTs.isEmpty()) {
+                throw new IllegalStateException("Dữ liệu nguồn chưa hợp lệ (BF-08 Step 3): Bảng chấm công kỳ " + month + "/" + year + " chưa được Trưởng phòng Nhân sự khóa sổ Cấp 2 (LOCKED)! Vui lòng yêu cầu HR hoàn tất quy trình BF-07.");
+            }
+            throw new IllegalStateException("Không tìm thấy dữ liệu bảng chấm công cho kỳ " + month + "/" + year);
         }
 
         BigDecimal totalGross = BigDecimal.ZERO;
@@ -425,28 +618,31 @@ public class PayrollEngineService {
             if (emp == null) continue;
 
             Contract contract = contractRepository.findByEmployeeIdAndStatus(emp.getId(), ContractStatus.ACTIVE)
-                    .orElseGet(() -> Contract.builder()
-                            .employeeId(emp.getId())
-                            .contractNumber("HD-TEMP-" + emp.getEmployeeCode())
-                            .contractType(ContractType.OFFICIAL_DEFINITE)
-                            .baseSalary(emp.getBaseSalary() != null ? emp.getBaseSalary() : LaborLawConstants.REGIONAL_MIN_WAGE_VUNG_1)
-                            .insuranceFlag(InsuranceFlag.FULL)
-                            .taxFlag(TaxFlag.PROGRESSIVE)
-                            .status(ContractStatus.ACTIVE)
-                            .build());
+                    .orElse(null);
+            if (contract == null) {
+                throw new IllegalStateException("Dữ liệu nguồn không toàn vẹn (BF-08 Step 3): Nhân viên " + emp.getFullName() + " (" + emp.getEmployeeCode() + ") chưa có Hợp đồng lao động ACTIVE! Vui lòng yêu cầu HR Staff bổ sung hợp đồng theo quy trình BF-08 Step 4.");
+            }
+
+            // Đọc phụ cấp công trường động từ cấu hình BF-10
+            ProjectAllowanceSnapshot allowances = resolveProjectAllowances(emp);
 
             PayrollCalculationInput input = PayrollCalculationInput.builder()
                     .employee(emp)
                     .contract(contract)
                     .timesheet(ts)
                     .heSoNangSuat(BigDecimal.ONE)
-                    .phuCapChucVu(BigDecimal.ZERO)
-                    .phuCapThamNien(BigDecimal.ZERO)
-                    .phuCapXangXe(LaborLawConstants.FUEL_ALLOWANCE_DEFAULT)
-                    .phuCapDienThoai(LaborLawConstants.PHONE_ALLOWANCE_DEFAULT)
-                    .phuCapLuuTru(emp.getEmployeeType() == EmployeeType.SITE_ENGINEER ? new BigDecimal("1500000") : BigDecimal.ZERO)
-                    .phuCapDocHai(emp.getEmployeeType() == EmployeeType.SITE_ENGINEER ? new BigDecimal("500000") : BigDecimal.ZERO)
-                    .phuCapTrachNhiem(emp.getEmployeeType() == EmployeeType.SITE_ENGINEER ? new BigDecimal("1000000") : BigDecimal.ZERO)
+                    .phuCapChucVu(emp.getPositionAllowance() != null ? emp.getPositionAllowance() : (emp.getEmployeeType() == EmployeeType.OFFICE_STAFF && emp.getPosition() != null && emp.getPosition().contains("Trưởng") ? new BigDecimal("2500000") : BigDecimal.ZERO))
+                    .phuCapThamNien(emp.getSeniorityAllowance() != null ? emp.getSeniorityAllowance() : BigDecimal.ZERO)
+                    .phuCapCom(emp.getMealPackage())
+                    .phuCapXangXe(emp.getFuelPackage() != null ? emp.getFuelPackage() : LaborLawConstants.FUEL_ALLOWANCE_DEFAULT)
+                    .phuCapDienThoai(emp.getPhonePackage() != null ? emp.getPhonePackage() : LaborLawConstants.PHONE_ALLOWANCE_DEFAULT)
+                    .phuCapLuuTru(allowances.getSiteLodging())
+                    .phuCapDocHai(allowances.getHazard())
+                    .phuCapTrachNhiem(allowances.getProjectResponsibility())
+                    .luongHieuQua(emp.getPerformanceSalary())
+                    .xepLoaiDanhGia(emp.getEvaluationGrade())
+                    .tyLeHieuQua(emp.getEvaluationPct())
+                    .haiMinhStandardMode(emp.getPerformanceSalary() != null)
                     .thuongDuAn(BigDecimal.ZERO)
                     .build();
 
