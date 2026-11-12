@@ -53,7 +53,14 @@ public final class LaborLawConstants {
     public static final BigDecimal MULTIPLIER_OT_HOLIDAY = new BigDecimal("3.00"); // 300% ngày lễ, tết (Đ.98.1c)
     public static final BigDecimal SURCHARGE_NIGHT_SHIFT = new BigDecimal("0.30"); // +30% ca đêm 22h-06h (Đ.98.2)
 
-    // ================= NGÀY CÔNG TIÊU CHUẨN =================
+    // ================= NGÀY CÔNG TIÊU CHUẨN & ĐỊNH MỨC HẢI MINH =================
     public static final BigDecimal STANDARD_WORK_DAYS_DEFAULT = new BigDecimal("26"); // Tối đa không quá 26 ngày/tháng
+    public static final BigDecimal OFFICE_STANDARD_WORK_DAYS_HM = new BigDecimal("22.5"); // Chuẩn công thực tế VP Hà Nội (5 ngày/tuần hoặc nửa thứ 7)
     public static final BigDecimal STANDARD_WORK_HOURS_PER_DAY = new BigDecimal("8");
+
+    // Định mức gói phụ cấp Khối Văn phòng (Phieu luong.xlsx - Công ty TNHH ĐT XD & PT Hải Minh)
+    public static final BigDecimal OFFICE_MEAL_PACKAGE_DEFAULT = new BigDecimal("900000"); // 900.000 đ/tháng (chia theo ngày công hưởng phụ cấp)
+    public static final BigDecimal OFFICE_FUEL_PACKAGE_DEFAULT = new BigDecimal("1000000"); // 1.000.000 đ/tháng (chia theo ngày công hưởng phụ cấp)
+    public static final BigDecimal OFFICE_PHONE_PACKAGE_DEFAULT = new BigDecimal("200000"); // 200.000 đ/tháng (chia theo ngày công hưởng phụ cấp)
+    public static final BigDecimal BUSINESS_TRIP_ALLOWANCE_PER_DAY = new BigDecimal("300000"); // 300.000 đ/ngày công tác (CT)
 }
