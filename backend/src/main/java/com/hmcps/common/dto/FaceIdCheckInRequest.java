@@ -15,6 +15,7 @@ public class FaceIdCheckInRequest {
     private Long employeeId;
     private LocalDateTime timestamp;
     private String faceSnapshotUrl;
+    private String faceEmbedding;   // Vector đặc trưng 128 chiều (hmcps-face-v1:[...])
     private Double confidenceScore; // Độ tin cậy nhận diện (ví dụ: >= 0.85)
     private String deviceInfo;      // "Laptop Webcam", "Mobile Camera", "Office Kiosk"
     private Double latitude;        // Tọa độ GPS lấy từ Browser Geolocation API trên Laptop hoặc Mobile
