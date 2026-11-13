@@ -19,4 +19,3 @@ public class ResetPasswordRequest {
     @NotBlank(message = "Xác nhận mật khẩu không được để trống")
     private String confirmPassword;
 }
-
