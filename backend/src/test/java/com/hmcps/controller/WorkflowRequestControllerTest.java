@@ -1,7 +1,10 @@
 package com.hmcps.controller;
 
+import com.hmcps.common.enums.EmployeeType;
+import com.hmcps.common.exception.BusinessException;
 import com.hmcps.entity.*;
 import com.hmcps.repository.*;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -9,13 +12,20 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -43,6 +53,8 @@ class WorkflowRequestControllerTest {
     private AttendanceExplanationRepository attendanceExplanationRepository;
     @Mock
     private AuditLogRepository auditLogRepository;
+    @Mock
+    private com.hmcps.service.integration.EmailService emailService;
 
     @InjectMocks
     private WorkflowRequestController workflowController;
@@ -71,7 +83,7 @@ class WorkflowRequestControllerTest {
         WorkflowRequestController.OvertimeDto req = WorkflowRequestController.OvertimeDto.builder()
                 .employeeId(empId)
                 .projectId(projId)
-                .workDate("2026-10-28")
+                .workDate(LocalDate.now().plusDays(1).toString())
                 .startTime("18:00")
                 .endTime("22:00")
                 .otHours(4.0)
@@ -260,5 +272,134 @@ class WorkflowRequestControllerTest {
         assertThat(response.getBody().getStatus()).isEqualTo("PENDING_SM");
         assertThat(response.getBody().getSuggestedCheckIn()).isEqualTo("07:30");
         verify(attendanceExplanationRepository, times(1)).save(any(AttendanceExplanation.class));
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("Overtime Khối Văn Phòng: Nhân viên văn phòng luôn đi thẳng PENDING_HR (NOT_REQUIRED CHT) dù payload có projectId")
+    void testCreateOvertime_OfficeStaff_AlwaysRoutesToHrOnly() {
+        Employee officeEmp = Employee.builder()
+                .id(18L)
+                .employeeCode("HM-018")
+                .fullName("Lê Thị Hoa")
+                .employeeType(EmployeeType.OFFICE_STAFF)
+                .role("ROLE_OFFICE_STAFF")
+                .build();
+        when(employeeRepository.findById(18L)).thenReturn(Optional.of(officeEmp));
+        when(overtimeRequestRepository.save(any(OvertimeRequest.class))).thenAnswer(i -> {
+            OvertimeRequest o = i.getArgument(0);
+            o.setId(801L);
+            return o;
+        });
+
+        WorkflowRequestController.OvertimeDto req = WorkflowRequestController.OvertimeDto.builder()
+                .employeeId(18L)
+                .projectId(1L) // Kể cả payload gửi nhầm projectId=1
+                .workDate(LocalDate.now().plusDays(1).toString())
+                .startTime("18:00")
+                .endTime("21:00")
+                .otHours(3.0)
+                .otType("WEEKDAY_150")
+                .multiplier(1.5)
+                .reason("Quyết toán chứng từ phòng hành chính")
+                .build();
+
+        ResponseEntity<WorkflowRequestController.OvertimeDto> resp = workflowController.createOvertimeRequest(req);
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody().getProjectId()).isEqualTo(0L);
+        assertThat(resp.getBody().getSiteManagerApproval()).isEqualTo("NOT_REQUIRED");
+        assertThat(resp.getBody().getStatus()).isEqualTo("PENDING_HR");
+    }
+
+    @Test
+    @DisplayName("Phân quyền OT: Kỹ sư trưởng / Chỉ huy trưởng (SITE_MANAGER) BỊ CHẶN nếu cố duyệt đơn OT của Nhân viên Văn phòng")
+    void testSiteManagerCannotApproveOfficeOvertime_Rejected() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        "chihuytruong.phat@haiminh.vn",
+                        null,
+                        Collections.singletonList(new SimpleGrantedAuthority("ROLE_SITE_MANAGER"))
+                )
+        );
+        WorkflowRequestController.ApproveOtRequest body = new WorkflowRequestController.ApproveOtRequest();
+        body.setRole("SITE_MANAGER");
+        body.setApproved(true);
+
+        // ID 6L là đơn OT khối văn phòng của HM-017 Vũ Hải Đăng (siteManagerApproval = NOT_REQUIRED)
+        assertThatThrownBy(() -> workflowController.approveOvertime(6L, body))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("KHÔNG được phép duyệt đơn OT của Nhân viên Văn phòng");
+    }
+
+    @Test
+    @DisplayName("Phân quyền OT: HR Staff phê duyệt trực tiếp đơn OT Khối Văn Phòng -> APPROVED")
+    void testHrStaffCanApproveOfficeOvertime_Success() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        "hrstaff.mai@haiminh.vn",
+                        null,
+                        Collections.singletonList(new SimpleGrantedAuthority("ROLE_HR_OFFICER"))
+                )
+        );
+        WorkflowRequestController.ApproveOtRequest body = new WorkflowRequestController.ApproveOtRequest();
+        body.setRole("HR_STAFF");
+        body.setApproved(true);
+
+        ResponseEntity<WorkflowRequestController.OvertimeDto> resp = workflowController.approveOvertime(6L, body);
+        assertThat(resp.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody().getHrApproval()).isEqualTo("APPROVED");
+        assertThat(resp.getBody().getStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    @DisplayName("Validate OT: BỊ CHẶN nếu đăng ký OT trong ngày hôm nay nhưng giờ bắt đầu trước giờ hiện tại")
+    void testCreateOvertime_StartTimeBeforeNowToday_Rejected() {
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+        String pastDateStr = now.isAfter(LocalTime.of(0, 5)) ? today.toString() : today.minusDays(1).toString();
+        String pastTimeStr = now.isAfter(LocalTime.of(0, 5))
+                ? now.minusMinutes(5).format(DateTimeFormatter.ofPattern("HH:mm"))
+                : "23:00";
+
+        WorkflowRequestController.OvertimeDto req = WorkflowRequestController.OvertimeDto.builder()
+                .employeeId(7L)
+                .projectId(1L)
+                .workDate(pastDateStr)
+                .startTime(pastTimeStr)
+                .endTime("23:59")
+                .otHours(2.0)
+                .otType("WEEKDAY_150")
+                .multiplier(1.5)
+                .reason("Đăng ký OT ngược giờ hiện tại")
+                .build();
+
+        assertThatThrownBy(() -> workflowController.createOvertimeRequest(req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("trước");
+    }
+
+    @Test
+    @DisplayName("Validate OT: BỊ CHẶN nếu đăng ký OT vào ngày trong quá khứ")
+    void testCreateOvertime_PastDate_Rejected() {
+        WorkflowRequestController.OvertimeDto req = WorkflowRequestController.OvertimeDto.builder()
+                .employeeId(7L)
+                .projectId(1L)
+                .workDate(LocalDate.now().minusDays(1).toString())
+                .startTime("18:00")
+                .endTime("22:00")
+                .otHours(4.0)
+                .otType("WEEKDAY_150")
+                .multiplier(1.5)
+                .reason("Đăng ký OT ngày hôm qua")
+                .build();
+
+        assertThatThrownBy(() -> workflowController.createOvertimeRequest(req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("quá khứ");
     }
 }
