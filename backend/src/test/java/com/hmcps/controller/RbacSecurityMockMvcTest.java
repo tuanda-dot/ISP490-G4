@@ -159,7 +159,7 @@ class RbacSecurityMockMvcTest {
         WorkflowRequestController.OvertimeDto dto = WorkflowRequestController.OvertimeDto.builder()
                 .employeeId(7L)
                 .projectId(1L)
-                .workDate("2026-10-29")
+                .workDate(java.time.LocalDate.now().plusDays(1).toString())
                 .startTime("18:00")
                 .endTime("22:00")
                 .otHours(4.0)
