@@ -265,4 +265,77 @@ class PayrollEngineServiceTest {
         // BHTN NLĐ bị chặn ở trần 106.200.000đ: 106.2M x 1% = 1.062.000 đ (thay vì 120M x 1% = 1.2M)
         assertThat(item.getBhtnNld()).isEqualByComparingTo(new BigDecimal("1062000.00"));
     }
+
+    @Test
+    @DisplayName("Đối soát thực tế Phiếu lương Công ty TNHH ĐT XD & PT Hải Minh (Phieu luong.xlsx - Phạm Văn Thịnh)")
+    void testHaiMinhRealPayslip_PhamVanThinh() {
+        Employee emp = Employee.builder()
+                .id(200L)
+                .employeeCode("HM-VP-01")
+                .fullName("Phạm Văn Thịnh")
+                .position("Chuyên viên phòng Kế hoạch KT")
+                .employeeType(EmployeeType.OFFICE_STAFF)
+                .isUnionMember(false)
+                .dependentsCount(0)
+                .performanceSalary(new BigDecimal("4000000"))
+                .evaluationGrade("A")
+                .evaluationPct(BigDecimal.ONE)
+                .mealPackage(new BigDecimal("900000"))
+                .fuelPackage(new BigDecimal("1000000"))
+                .phonePackage(new BigDecimal("200000"))
+                .build();
+
+        Contract contract = Contract.builder()
+                .employeeId(200L)
+                .baseSalary(new BigDecimal("18000000"))
+                .insuranceFlag(InsuranceFlag.FULL)
+                .taxFlag(TaxFlag.FLAT_10)
+                .build();
+
+        MonthlyTimesheet ts = MonthlyTimesheet.builder()
+                .standardWorkDays(new BigDecimal("22.50"))
+                .actualWorkDays(new BigDecimal("18.00"))
+                .officialWorkDays(new BigDecimal("18.00"))
+                .probationWorkDays(BigDecimal.ZERO)
+                .mealWorkDays(new BigDecimal("18.00"))
+                .allowanceWorkDays(new BigDecimal("18.00"))
+                .unpaidLeaveDays(new BigDecimal("4.50"))
+                .overtimeHours(BigDecimal.ZERO)
+                .nightHours(BigDecimal.ZERO)
+                .build();
+
+        PayrollEngineService.PayrollCalculationInput input = PayrollEngineService.PayrollCalculationInput.builder()
+                .employee(emp)
+                .contract(contract)
+                .timesheet(ts)
+                .phuCapCom(new BigDecimal("900000"))
+                .phuCapXangXe(new BigDecimal("1000000"))
+                .phuCapDienThoai(new BigDecimal("200000"))
+                .luongHieuQua(new BigDecimal("4000000"))
+                .xepLoaiDanhGia("A")
+                .tyLeHieuQua(BigDecimal.ONE)
+                .ngayCongHuongPhuCap(new BigDecimal("18.00"))
+                .haiMinhStandardMode(true)
+                .build();
+
+        PayrollItem item = payrollEngineService.calculatePayrollItem(500L, input);
+
+        // Lương cơ bản thực hưởng = ROUND(18M / 22.5 * 18) = 14.400.000
+        // Lương HQCV thực hưởng = ROUND(4M / 22.5 * 18 * 1.0) = 3.200.000
+        assertThat(item.getLuongHieuQuaThucHuong()).isEqualByComparingTo(new BigDecimal("3200000"));
+        // Phụ cấp ăn trưa prorated = ROUND(900k / 22.5 * 18) = 720.000
+        assertThat(item.getPhuCapCom()).isEqualByComparingTo(new BigDecimal("720000"));
+        // Phụ cấp xăng xe prorated = ROUND(1M / 22.5 * 18) = 800.000
+        assertThat(item.getPhuCapXangXe()).isEqualByComparingTo(new BigDecimal("800000"));
+        // Phụ cấp điện thoại prorated = ROUND(200k / 22.5 * 18) = 160.000
+        assertThat(item.getPhuCapDienThoai()).isEqualByComparingTo(new BigDecimal("160000"));
+        // Tổng Section II = 14.4M + 3.2M + 720k + 800k + 160k = 19.280.000 đ
+        assertThat(item.getTongThuNhap()).isEqualByComparingTo(new BigDecimal("19280000"));
+        // Section III BHXH = 10.5% * 18M = 1.890.000 đ
+        assertThat(item.getCongBhNld()).isEqualByComparingTo(new BigDecimal("1890000"));
+        // Thuế TNCN 10% = 1.928.000 đ
+        assertThat(item.getThueTncn()).isEqualByComparingTo(new BigDecimal("1928000"));
+        // Thực lĩnh = 19.280.000 - 1.890.000 - 1.928.000 = 15.462.000 đ
+        assertThat(item.getThucNhan()).isEqualByComparingTo(new BigDecimal("15462000"));
+    }
 }
