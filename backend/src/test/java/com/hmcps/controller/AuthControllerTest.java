@@ -2,8 +2,10 @@ package com.hmcps.controller;
 
 import com.hmcps.common.dto.ApiResponse;
 import com.hmcps.common.dto.ForceChangePasswordRequest;
+import com.hmcps.common.dto.ForgotPasswordRequest;
 import com.hmcps.common.dto.LoginRequest;
 import com.hmcps.common.dto.LoginResponse;
+import com.hmcps.common.dto.ResetPasswordRequest;
 import com.hmcps.security.UserPrincipal;
 import com.hmcps.service.AuthService;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.util.Collections;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -122,5 +125,50 @@ class AuthControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData().getEmail()).isEqualTo("ketoan@haiminh.vn");
         assertThat(response.getBody().getData().getEmployeeCode()).isEqualTo("HM-KT-01");
+    }
+
+    @Test
+    @DisplayName("Forgot Password: Gửi OTP khôi phục mật khẩu qua email thành công")
+    void testForgotPassword_Success() {
+        ForgotPasswordRequest req = new ForgotPasswordRequest();
+        req.setEmail("ketoan.lan@haiminh.vn");
+
+        when(authService.forgotPassword(any(ForgotPasswordRequest.class)))
+                .thenReturn(Map.of(
+                        "email", "ketoan.lan@haiminh.vn",
+                        "channel", "EMAIL_SERVER_SANDBOX",
+                        "expiresInMinutes", 5,
+                        "message", "Đã tạo mã OTP khôi phục mật khẩu"
+                ));
+
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = authController.forgotPassword(req);
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getData().get("email")).isEqualTo("ketoan.lan@haiminh.vn");
+    }
+
+    @Test
+    @DisplayName("Reset Password: Xác nhận OTP và đặt lại mật khẩu mới thành công")
+    void testResetPassword_Success() {
+        ResetPasswordRequest req = new ResetPasswordRequest();
+        req.setEmail("ketoan.lan@haiminh.vn");
+        req.setOtpCode("123456");
+        req.setNewPassword("NewPass@2026");
+        req.setConfirmPassword("NewPass@2026");
+
+        when(authService.resetPassword(any(ResetPasswordRequest.class)))
+                .thenReturn(Map.of(
+                        "email", "ketoan.lan@haiminh.vn",
+                        "message", "Đặt lại mật khẩu thành công."
+                ));
+
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = authController.resetPassword(req);
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getData().get("email")).isEqualTo("ketoan.lan@haiminh.vn");
     }
 }
