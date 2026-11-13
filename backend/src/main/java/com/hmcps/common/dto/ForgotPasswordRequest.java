@@ -10,4 +10,3 @@ public class ForgotPasswordRequest {
     @Email(message = "Định dạng email không hợp lệ")
     private String email;
 }
-
