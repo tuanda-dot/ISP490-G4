@@ -9,4 +9,5 @@ import java.util.Optional;
 @Repository
 public interface DailySiteOtpRepository extends JpaRepository<DailySiteOtp, Long> {
     Optional<DailySiteOtp> findByProjectIdAndValidDateAndIsActiveTrue(Long projectId, LocalDate validDate);
+    Optional<DailySiteOtp> findByProjectIdAndValidDate(Long projectId, LocalDate validDate);
 }
