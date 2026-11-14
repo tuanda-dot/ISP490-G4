@@ -1,5 +1,6 @@
 package com.hmcps.entity;
 
+import com.hmcps.common.enums.ContractType;
 import com.hmcps.common.enums.EmployeeType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -58,6 +59,11 @@ public class Employee {
     @Builder.Default
     private Boolean isFaceRegistered = false;
 
+    @Column(length = 150)
+    private String faceUpdatedBy;
+
+    private LocalDateTime faceUpdatedAt;
+
     // Cờ đoàn viên công đoàn (1 = đoàn viên -> đóng 1% đoàn phí, 0 = không đóng)
     @Builder.Default
     private Boolean isUnionMember = false;
@@ -75,6 +81,34 @@ public class Employee {
     // Mức lương cơ bản thỏa thuận (VNĐ)
     @Column(precision = 15, scale = 2)
     private BigDecimal baseSalary;
+
+    // Lương hiệu quả công việc khoán theo quy chế Hải Minh (VNĐ) & Đánh giá KPI (A/B/C)
+    @Column(precision = 15, scale = 2)
+    private BigDecimal performanceSalary;
+
+    @Column(length = 10)
+    @Builder.Default
+    private String evaluationGrade = "A";
+
+    @Column(precision = 5, scale = 4)
+    @Builder.Default
+    private BigDecimal evaluationPct = BigDecimal.ONE;
+
+    // Gói phụ cấp chuẩn hàng tháng (Phieu luong.xlsx)
+    @Column(precision = 15, scale = 2)
+    private BigDecimal mealPackage;
+
+    @Column(precision = 15, scale = 2)
+    private BigDecimal fuelPackage;
+
+    @Column(precision = 15, scale = 2)
+    private BigDecimal phonePackage;
+
+    @Column(precision = 15, scale = 2)
+    private BigDecimal positionAllowance;
+
+    @Column(precision = 15, scale = 2)
+    private BigDecimal seniorityAllowance;
 
     private LocalDate hireDate;
 
@@ -95,4 +129,17 @@ public class Employee {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     private LocalDateTime updatedAt;
+
+    // Transient onboarding payload fields (khởi tạo hợp đồng & phụ cấp công trường ban đầu)
+    @Transient
+    private ContractType contractType;
+
+    @Transient
+    private LocalDate contractEndDate;
+
+    @Transient
+    private BigDecimal siteLodgingAllowance;
+
+    @Transient
+    private BigDecimal hazardAllowance;
 }
