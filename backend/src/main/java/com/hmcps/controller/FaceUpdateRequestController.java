@@ -2,6 +2,7 @@ package com.hmcps.controller;
 
 import com.hmcps.common.exception.BusinessException;
 import com.hmcps.common.exception.ResourceNotFoundException;
+import com.hmcps.common.util.FaceImageValidator;
 import com.hmcps.entity.AuditLog;
 import com.hmcps.entity.Employee;
 import com.hmcps.entity.FaceUpdateRequest;
@@ -35,8 +36,8 @@ import java.util.Set;
 public class FaceUpdateRequestController {
 
     private static final Set<String> HR_ADMIN_ROLES = Set.of(
-            "ROLE_HR_MANAGER", "ROLE_HR_STAFF", "ROLE_HR_OFFICER", "ROLE_ADMIN", "ROLE_SYSTEM_ADMIN",
-            "HR_MANAGER", "HR_STAFF", "HR_OFFICER", "ADMIN", "SYSTEM_ADMIN"
+            "ROLE_HR_MANAGER", "ROLE_HR_STAFF", "ROLE_HR_OFFICER",
+            "HR_MANAGER", "HR_STAFF", "HR_OFFICER"
     );
 
     private final FaceUpdateRequestRepository faceUpdateRequestRepository;
@@ -94,6 +95,11 @@ public class FaceUpdateRequestController {
         Employee emp = employeeRepository.findById(principal.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hồ sơ nhân sự."));
 
+        String normalizedProposedImage = FaceImageValidator.normalizeAndValidate(body.getProposedFaceImageUrl());
+        if (isBlank(normalizedProposedImage)) {
+            throw new BusinessException("Vui lòng chụp hoặc tải lên ảnh khuôn mặt hợp lệ trước khi gửi!");
+        }
+
         // Hủy các yêu cầu PENDING cũ của chính nhân viên để thay bằng bản chụp mới nhất
         List<FaceUpdateRequest> existingPending = faceUpdateRequestRepository.findByEmployeeIdAndStatus(emp.getId(), "PENDING");
         for (FaceUpdateRequest old : existingPending) {
@@ -109,7 +115,7 @@ public class FaceUpdateRequestController {
                 .employeeName(emp.getFullName())
                 .employeeType(emp.getEmployeeType() != null ? emp.getEmployeeType().name() : "OFFICE_STAFF")
                 .currentFaceImageUrl(emp.getFaceImageUrl())
-                .proposedFaceImageUrl(body.getProposedFaceImageUrl().trim())
+                .proposedFaceImageUrl(normalizedProposedImage)
                 .proposedFaceEmbedding(body.getProposedFaceEmbedding().trim())
                 .reason(body.getReason().trim())
                 .status("PENDING")
@@ -122,7 +128,7 @@ public class FaceUpdateRequestController {
         return ResponseEntity.ok(saved);
     }
 
-    @PreAuthorize("hasAnyRole('HR_MANAGER', 'HR_STAFF', 'HR_OFFICER', 'ADMIN', 'SYSTEM_ADMIN', 'SITE_MANAGER')")
+    @PreAuthorize("hasAnyRole('HR_MANAGER', 'HR_STAFF', 'HR_OFFICER', 'SITE_MANAGER')")
     @PostMapping("/{id}/approve")
     @Transactional
     public ResponseEntity<FaceUpdateRequest> approveRequest(@PathVariable Long id) {
@@ -159,7 +165,7 @@ public class FaceUpdateRequestController {
         return ResponseEntity.ok(saved);
     }
 
-    @PreAuthorize("hasAnyRole('HR_MANAGER', 'HR_STAFF', 'HR_OFFICER', 'ADMIN', 'SYSTEM_ADMIN', 'SITE_MANAGER')")
+    @PreAuthorize("hasAnyRole('HR_MANAGER', 'HR_STAFF', 'HR_OFFICER', 'SITE_MANAGER')")
     @PostMapping("/{id}/reject")
     @Transactional
     public ResponseEntity<FaceUpdateRequest> rejectRequest(
