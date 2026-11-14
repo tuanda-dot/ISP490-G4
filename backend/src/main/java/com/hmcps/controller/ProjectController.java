@@ -33,12 +33,14 @@ public class ProjectController {
         private LocalDate releaseDate;
     }
 
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @GetMapping
     public ResponseEntity<List<Project>> getAllProjects(
             @RequestParam(required = false, defaultValue = "ACTIVE") String status) {
         return ResponseEntity.ok(projectRepository.findByStatus(status));
     }
 
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<Project> getProjectById(@PathVariable Long id) {
         Project project = projectRepository.findById(id)
@@ -46,6 +48,7 @@ public class ProjectController {
         return ResponseEntity.ok(project);
     }
 
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('DIRECTOR', 'CEO')")
     @PostMapping
     public ResponseEntity<Project> createProject(@RequestBody Project project) {
         if (project.getGeofenceRadiusMeters() != null && (project.getGeofenceRadiusMeters() < 50 || project.getGeofenceRadiusMeters() > 5000)) {
@@ -64,6 +67,7 @@ public class ProjectController {
         return ResponseEntity.ok(created);
     }
 
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('DIRECTOR', 'CEO')")
     @PutMapping("/{id}")
     public ResponseEntity<Project> updateProject(@PathVariable Long id, @RequestBody Project request) {
         Project proj = projectRepository.findById(id)
@@ -96,8 +100,9 @@ public class ProjectController {
     }
 
     /**
-     * Điều động kỹ sư hiện trường vào dự án (UC-05)
+     * Điều động kỹ sư hiện trường vào dự án (UC-05) — Chỉ HR Staff / HR Manager
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('HR_MANAGER', 'HR_STAFF', 'HR_OFFICER')")
     @PostMapping("/{id}/assign")
     public ResponseEntity<EngineerAssignment> assignEngineer(
             @PathVariable Long id,
@@ -120,6 +125,7 @@ public class ProjectController {
     /**
      * Danh sách kỹ sư đang được phân công tại dự án (UC-05)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @GetMapping("/{id}/engineers")
     public ResponseEntity<List<EngineerAssignment>> getAssignedEngineers(@PathVariable Long id) {
         return ResponseEntity.ok(assignmentRepository.findByProjectIdAndStatus(id, "ACTIVE"));
