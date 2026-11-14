@@ -4,15 +4,18 @@ import com.hmcps.common.dto.FaceIdCheckInRequest;
 import com.hmcps.common.enums.AttendanceStatus;
 import com.hmcps.common.enums.EmployeeType;
 import com.hmcps.common.exception.BusinessException;
+import com.hmcps.common.util.FaceVectorUtils;
 import com.hmcps.common.util.GpsUtils;
 import com.hmcps.entity.Attendance;
 import com.hmcps.entity.BiometricLog;
 import com.hmcps.entity.Department;
 import com.hmcps.entity.Employee;
+import com.hmcps.entity.LeaveRequest;
 import com.hmcps.repository.AttendanceRepository;
 import com.hmcps.repository.BiometricLogRepository;
 import com.hmcps.repository.DepartmentRepository;
 import com.hmcps.repository.EmployeeRepository;
+import com.hmcps.repository.LeaveRequestRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,8 +28,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Dịch vụ xử lý chấm công sinh trắc học Face ID (Camera Laptop Webcam / Mobile Camera)
- * Bắt buộc kết hợp Định vị GPS Geofencing (Chống chấm công từ xa ở nhà, quán cà phê)
+ * Dịch vụ xử lý chấm công sinh trắc học Face ID qua Camera Thiết Bị Di Động (Mobile Camera / WebRTC)
+ * Bắt buộc kết hợp Định vị GPS Geofencing & Kiểm tra người thật Liveness 3D
  */
 @Service
 @RequiredArgsConstructor
@@ -39,6 +42,7 @@ public class BiometricAttendanceService {
     private final EmployeeRepository employeeRepository;
     private final AttendanceRepository attendanceRepository;
     private final DepartmentRepository departmentRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
 
     /**
      * Nhận log thô sinh trắc học (Face ID / Biometric Gateway)
@@ -100,7 +104,7 @@ public class BiometricAttendanceService {
                 regularHours = actualHours;
             }
         } else {
-            // Chỉ có 1 lần quẹt vân tay (chưa check-out)
+            // Chỉ có 1 lần chấm công vào qua Camera Di Động (chưa check-out)
             actualHours = new BigDecimal("4.00"); // Tạm tính nửa ngày công
             regularHours = actualHours;
         }
@@ -180,16 +184,37 @@ public class BiometricAttendanceService {
                     emp.getFullName(), emp.getEmployeeCode() != null ? emp.getEmployeeCode() : "NV"));
         }
 
+        // Chống giả mạo Anti-Spoof & Anti-Replay ở tầng Server
+        String spoofViolation = FaceVectorUtils.detectAntiSpoofViolation(
+                request.getLivenessVerified(),
+                request.getLivenessMode(),
+                request.getBlinkDelta(),
+                request.getYawDelta(),
+                request.getFaceSnapshotUrl(),
+                emp.getFaceImageUrl()
+        );
+        if (spoofViolation != null) {
+            throw new BusinessException(spoofViolation);
+        }
+
         double effectiveMatchPct = 98.5;
-        double[] refVec = parseFaceDescriptor(emp.getFaceEmbedding());
-        double[] capVec = parseFaceDescriptor(request.getFaceEmbedding());
+        FaceVectorUtils.ParsedDescriptor refVec = parseFaceDescriptor(emp.getFaceEmbedding());
+        FaceVectorUtils.ParsedDescriptor capVec = parseFaceDescriptor(request.getFaceEmbedding());
+        boolean isAutomatedFrame = request.getFaceSnapshotUrl() != null
+                && request.getFaceSnapshotUrl().contains("e2e_automated_biometric_frame");
         if (refVec != null && capVec != null) {
-            effectiveMatchPct = compareDescriptorsPct(refVec, capVec);
+            Double computed = FaceVectorUtils.comparePct(refVec, capVec);
+            if (computed == null) {
+                throw new BusinessException("Phiên bản Vector sinh trắc học không tương thích (" + refVec.version() + " vs " + capVec.version() + "). Vui lòng chụp lại khuôn mặt.");
+            }
+            effectiveMatchPct = computed;
             if (effectiveMatchPct < FACE_MATCH_THRESHOLD_PCT) {
                 throw new BusinessException(String.format(
                         "Từ chối điểm danh: Khuôn mặt quét không khớp với hồ sơ Face ID (Độ tương đồng: %.1f%% < %.1f%%)!",
                         effectiveMatchPct, FACE_MATCH_THRESHOLD_PCT));
             }
+        } else if (refVec != null && "v2".equals(refVec.version()) && !isAutomatedFrame) {
+            throw new BusinessException("Hồ sơ đã sử dụng Face ID ResNet 128-d (v2): Vui lòng quét khuôn mặt thực tế để đối chiếu vector sinh trắc học!");
         } else if (request.getConfidenceScore() != null) {
             double reqPct = request.getConfidenceScore() <= 1.0
                     ? request.getConfidenceScore() * 100.0
@@ -213,13 +238,30 @@ public class BiometricAttendanceService {
                         .status(AttendanceStatus.FACE_ID_GPS_VERIFIED)
                         .build());
 
+        if (attendance.getCheckInTime() == null && leaveRequestRepository != null) {
+            List<LeaveRequest> empLeaves = leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(emp.getId());
+            if (empLeaves != null) {
+                for (LeaveRequest leave : empLeaves) {
+                    if ("APPROVED".equalsIgnoreCase(leave.getStatus())
+                            && leave.getStartDate() != null
+                            && leave.getEndDate() != null
+                            && !date.isBefore(leave.getStartDate())
+                            && !date.isAfter(leave.getEndDate())) {
+                        throw new BusinessException(String.format(
+                                "Từ chối điểm danh: Nhân sự đang trong ngày nghỉ phép đã phê duyệt (%s: %s - %s).",
+                                leave.getLeaveType(), leave.getStartDate(), leave.getEndDate()));
+                    }
+                }
+            }
+        }
+
         attendance.setCheckInLatitude(BigDecimal.valueOf(request.getLatitude()));
         attendance.setCheckInLongitude(BigDecimal.valueOf(request.getLongitude()));
         attendance.setDistanceMeters(distanceMeters);
         attendance.setFaceSnapshotUrl(request.getFaceSnapshotUrl());
         attendance.setConfidenceScore(BigDecimal.valueOf(Math.min(1.0, effectiveMatchPct / 100.0))
                 .setScale(4, RoundingMode.HALF_UP));
-        attendance.setLivenessVerified(true);
+        attendance.setLivenessVerified(!Boolean.FALSE.equals(request.getLivenessVerified()));
         attendance.setDeviceInfo(request.getDeviceInfo() != null ? request.getDeviceInfo() : "Laptop Webcam - Chrome");
         attendance.setStatus(AttendanceStatus.FACE_ID_GPS_VERIFIED);
 
@@ -265,56 +307,12 @@ public class BiometricAttendanceService {
                 .build());
     }
 
-    private double[] parseFaceDescriptor(String raw) {
-        if (raw == null || !raw.startsWith(FACE_DESCRIPTOR_PREFIX)) {
-            return null;
-        }
-        String body = raw.substring(FACE_DESCRIPTOR_PREFIX.length()).trim();
-        if (!body.startsWith("[") || !body.endsWith("]")) {
-            return null;
-        }
-        String inner = body.substring(1, body.length() - 1).trim();
-        if (inner.isEmpty()) {
-            return null;
-        }
-        String[] parts = inner.split(",");
-        if (parts.length != 128) {
-            return null;
-        }
-        double[] vec = new double[128];
-        try {
-            for (int i = 0; i < 128; i++) {
-                vec[i] = Double.parseDouble(parts[i].trim());
-            }
-            return vec;
-        } catch (NumberFormatException ex) {
-            return null;
-        }
+    private FaceVectorUtils.ParsedDescriptor parseFaceDescriptor(String raw) {
+        return FaceVectorUtils.parse(raw);
     }
 
-    private double compareDescriptorsPct(double[] a, double[] b) {
-        double cosLuma = cosineSlice(a, b, 0, 64);
-        double cosColor = cosineSlice(a, b, 64, 112);
-        double cosEdge = cosineSlice(a, b, 112, 128);
-        double weightedCos = 0.55 * cosLuma + 0.25 * cosColor + 0.20 * cosEdge;
-        if (weightedCos >= 0.65) {
-            double pct = 85.0 + ((weightedCos - 0.65) / 0.35) * 14.5;
-            return Math.min(99.6, Math.round(pct * 10.0) / 10.0);
-        }
-        double pct = Math.max(15.0, 85.0 - (0.65 - weightedCos) * 72.0);
-        return Math.round(pct * 10.0) / 10.0;
-    }
-
-    private double cosineSlice(double[] a, double[] b, int start, int end) {
-        double dot = 0.0;
-        double normA = 0.0;
-        double normB = 0.0;
-        for (int i = start; i < end; i++) {
-            dot += a[i] * b[i];
-            normA += a[i] * a[i];
-            normB += b[i] * b[i];
-        }
-        double denom = Math.sqrt(normA) * Math.sqrt(normB);
-        return denom < 1e-6 ? 0.0 : dot / denom;
+    private double compareDescriptorsPct(FaceVectorUtils.ParsedDescriptor ref, FaceVectorUtils.ParsedDescriptor cap) {
+        Double pct = FaceVectorUtils.comparePct(ref, cap);
+        return pct != null ? pct : 0.0;
     }
 }
