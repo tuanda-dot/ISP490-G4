@@ -20,4 +20,10 @@ public class FaceIdCheckInRequest {
     private String deviceInfo;      // "Laptop Webcam", "Mobile Camera", "Office Kiosk"
     private Double latitude;        // Tọa độ GPS lấy từ Browser Geolocation API trên Laptop hoặc Mobile
     private Double longitude;       // Tọa độ GPS lấy từ Browser Geolocation API trên Laptop hoặc Mobile
+    private Boolean livenessVerified;
+    private String livenessMode;
+    private String livenessSummary;
+    private Double blinkDelta;
+    private Double yawDelta;
+    private Integer livenessFrameCount;
 }
