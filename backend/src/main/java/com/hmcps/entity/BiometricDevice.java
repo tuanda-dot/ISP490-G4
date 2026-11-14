@@ -23,16 +23,16 @@ public class BiometricDevice {
 
     @Column(nullable = false, length = 30)
     @Builder.Default
-    private String deviceType = "FACE_ID_CAMERA"; // FACE_ID_CAMERA, TABLET_KIOSK, WEBCAM_PORTAL, ZKTECO_HARDWARE
+    private String deviceType = "MOBILE_APP_CAMERA"; // MOBILE_APP_CAMERA, MOBILE_IOS_CAMERA, MOBILE_ANDROID_CAMERA, MOBILE_WEB_WEBRTC
 
     @Column(nullable = false, length = 45)
     private String ipAddress;
 
     @Builder.Default
-    private Integer port = 4370;
+    private Integer port = 443;
 
     @Column(length = 150)
-    private String location; // Vd: Sảnh tầng 1 - Trụ sở chính
+    private String location; // Vd: Camera Di Động - Trụ sở chính / Công trường
 
     @Column(precision = 4, scale = 2, nullable = false)
     @Builder.Default
