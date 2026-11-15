@@ -61,6 +61,7 @@ public class DashboardController {
         private boolean isBalanced;
     }
 
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('DIRECTOR', 'CEO', 'CHIEF_ACCOUNTANT', 'ACCOUNTANT', 'PAYROLL_ACCOUNTANT', 'HR_MANAGER', 'HR_STAFF', 'HR_OFFICER')")
     @GetMapping("/api/dashboard/executive")
     public ResponseEntity<ExecutiveDashboardResponse> getExecutiveDashboard(
             @RequestParam(required = false) Integer month,
