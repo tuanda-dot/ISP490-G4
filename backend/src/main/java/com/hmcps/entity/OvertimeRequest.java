@@ -46,14 +46,29 @@ public class OvertimeRequest {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String reason;
 
+    // Người lập đơn (Trưởng phòng / Chỉ huy trưởng theo Phương án B)
+    private Long createdById;
+    private String createdByName;
+    private String createdByRole;
+
+    // Bước 1: Ban Giám Đốc duyệt chủ trương trước khi làm
+    @Column(length = 30)
+    @Builder.Default
+    private String directorApproval = "PENDING"; // PENDING, APPROVED, REJECTED
+    private Long directorId;
+    private LocalDateTime directorApprovedAt;
+    @Builder.Default
+    private Boolean budgetOverrideApproved = false;
+
     @Column(nullable = false, length = 30)
     @Builder.Default
-    private String siteManagerApproval = "PENDING"; // PENDING, APPROVED, REJECTED, NOT_REQUIRED
+    private String siteManagerApproval = "PENDING"; // PENDING, APPROVED, REJECTED, NOT_REQUIRED, CREATED_BY_SM
 
     private Long siteManagerId;
 
     private LocalDateTime siteManagerApprovedAt;
 
+    // Bước 2: Hậu kiểm Face ID & Tài chính (HR / Kế toán - SoD)
     @Column(nullable = false, length = 30)
     @Builder.Default
     private String hrApproval = "PENDING"; // PENDING, APPROVED, REJECTED
@@ -62,9 +77,33 @@ public class OvertimeRequest {
 
     private LocalDateTime hrApprovedAt;
 
-    @Column(nullable = false, length = 30)
+    private Long reconciledById;
+    private String reconciledByName;
+    private String reconciledByRole;
+
+    // Đối chiếu Face ID & Dự toán trần ngân sách OT
+    @Column(precision = 5, scale = 2)
+    private BigDecimal actualFaceIdHours;
+    @Column(precision = 5, scale = 2)
+    private BigDecimal payableOtHours;
+    private String faceIdReconcileStatus; // MATCHED, PARTIAL, MISSING, PENDING_SHIFT
+    private String faceIdCheckIn;
+    private String faceIdCheckOut;
+    @Column(columnDefinition = "TEXT")
+    private String faceIdNote;
+
+    @Column(precision = 19, scale = 2)
+    private BigDecimal estimatedCost;
+    @Column(precision = 19, scale = 2)
+    private BigDecimal budgetCapAtCreation;
+    @Column(precision = 19, scale = 2)
+    private BigDecimal projectedProjectOtCost;
     @Builder.Default
-    private String status = "PENDING_SM"; // PENDING_SM, PENDING_HR, APPROVED, REJECTED
+    private Boolean isBudgetOverrun = false;
+
+    @Column(nullable = false, length = 40)
+    @Builder.Default
+    private String status = "PENDING_DIRECTOR"; // PENDING_DIRECTOR, PENDING_RECONCILIATION, PENDING_SM, PENDING_HR, APPROVED, REJECTED
 
     @Column(columnDefinition = "TEXT")
     private String rejectionReason;
