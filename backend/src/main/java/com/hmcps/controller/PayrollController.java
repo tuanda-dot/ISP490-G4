@@ -7,6 +7,7 @@ import com.hmcps.entity.ProjectCostAllocation;
 import com.hmcps.repository.PayrollItemRepository;
 import com.hmcps.repository.PayrollRepository;
 import com.hmcps.repository.ProjectCostAllocationRepository;
+import com.hmcps.service.AuditLogService;
 import com.hmcps.service.PayrollEngineService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class PayrollController {
     private final PayrollItemRepository payrollItemRepository;
     private final ProjectCostAllocationRepository costAllocationRepository;
     private final com.hmcps.service.AccountingExportService accountingExportService;
+    private final AuditLogService auditLogService;
 
     @Data
     public static class CalculatePayrollRequest {
@@ -55,6 +57,8 @@ public class PayrollController {
     public ResponseEntity<Payroll> calculateMonthlyPayroll(@RequestBody CalculatePayrollRequest request) {
         Payroll payroll = payrollEngineService.calculateMonthlyPayroll(
                 request.getMonth(), request.getYear(), request.getOperatorUserId());
+        auditLogService.record("PAYROLL_CALCULATE", "payrolls", payroll.getId(), null, null,
+                "Kế toán viên chạy tính toán Bảng lương kỳ " + request.getMonth() + "/" + request.getYear());
         return ResponseEntity.ok(payroll);
     }
 
@@ -159,6 +163,8 @@ public class PayrollController {
         payroll.setStatus(PayrollStatus.REVIEWED);
         payroll.setUpdatedAt(LocalDateTime.now());
         Payroll saved = payrollRepository.save(payroll);
+        auditLogService.record("PAYROLL_CHIEF_REVIEW", "payrolls", saved.getId(), null, null,
+                "Kế toán trưởng thẩm định & trình duyệt ngân sách kỳ " + saved.getPayrollCode());
         return ResponseEntity.ok(saved);
     }
 
@@ -204,6 +210,8 @@ public class PayrollController {
         payroll.setRejectedAt(LocalDateTime.now());
         payroll.setUpdatedAt(LocalDateTime.now());
         Payroll saved = payrollRepository.save(payroll);
+        auditLogService.record("PAYROLL_DIRECTOR_REJECT", "payrolls", saved.getId(), null, null,
+                "Giám đốc từ chối phê duyệt ngân sách " + saved.getPayrollCode() + ": " + saved.getDirectorRejectionReason());
         return ResponseEntity.ok(saved);
     }
 
@@ -226,6 +234,8 @@ public class PayrollController {
         payroll.setApprovedAt(LocalDateTime.now());
         payroll.setUpdatedAt(LocalDateTime.now());
         Payroll saved = payrollRepository.save(payroll);
+        auditLogService.record("PAYROLL_DIRECTOR_APPROVE", "payrolls", saved.getId(), null, null,
+                "Ban Giám đốc ký duyệt tổng ngân sách kỳ " + saved.getPayrollCode());
         return ResponseEntity.ok(saved);
     }
 
@@ -239,6 +249,8 @@ public class PayrollController {
         payroll.setStatus(PayrollStatus.PAID);
         payroll.setUpdatedAt(LocalDateTime.now());
         Payroll saved = payrollRepository.save(payroll);
+        auditLogService.record("PAYROLL_LOCK_AND_PAY", "payrolls", saved.getId(), null, null,
+                "Kế toán trưởng khóa sổ chi trả kỳ lương " + saved.getPayrollCode());
         return ResponseEntity.ok(saved);
     }
 }
