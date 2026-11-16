@@ -43,22 +43,39 @@ public class AuthService {
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
+    private final AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
         String normalizedEmail = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
         // 1. Xác thực Email
         Employee employee = employeeRepository.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new BadCredentialsException("Email hoặc mật khẩu không chính xác."));
+                .orElseThrow(() -> {
+                    auditLogService.recordAsActor(
+                            "LOGIN_FAILED", "auth", null, null, normalizedEmail, "UNKNOWN",
+                            null, null, "Đăng nhập thất bại: Email [" + normalizedEmail + "] không tồn tại"
+                    );
+                    return new BadCredentialsException("Email hoặc mật khẩu không chính xác.");
+                });
 
         // 2. Xác thực Mật khẩu
         if (employee.getPasswordHash() == null || !passwordEncoder.matches(request.getPassword(), employee.getPasswordHash())) {
             log.warn("Failed login attempt for email: {}", request.getEmail());
+            auditLogService.recordAsActor(
+                    "LOGIN_FAILED", "auth", employee.getId(), employee.getId(), employee.getFullName(),
+                    normalizeRoleForFrontend(employee.getRole()),
+                    null, null, "Cảnh báo sai mật khẩu đăng nhập tài khoản " + normalizedEmail
+            );
             throw new BadCredentialsException("Email hoặc mật khẩu không chính xác.");
         }
 
         // 3. Kiểm tra trạng thái tài khoản
         if (!"ACTIVE".equalsIgnoreCase(employee.getStatus())) {
+            auditLogService.recordAsActor(
+                    "LOGIN_BLOCKED_INACTIVE", "auth", employee.getId(), employee.getId(), employee.getFullName(),
+                    normalizeRoleForFrontend(employee.getRole()),
+                    null, null, "Chặn đăng nhập tài khoản đang bị khóa (" + employee.getStatus() + "): " + normalizedEmail
+            );
             throw new BusinessException("Tài khoản đã bị tạm khóa hoặc ngừng hoạt động. Vui lòng liên hệ Quản trị viên.");
         }
 
@@ -152,6 +169,11 @@ public class AuthService {
         employee.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         employee.setMustChangePassword(false);
         employeeRepository.save(employee);
+        auditLogService.recordAsActor(
+                "PASSWORD_FORCED_CHANGE", "auth", employee.getId(), employee.getId(), employee.getFullName(),
+                normalizeRoleForFrontend(employee.getRole()),
+                null, null, "Nhân sự hoàn tất đổi mật khẩu bắt buộc lần đầu: " + employee.getEmail()
+        );
 
         log.info("Password successfully changed for employee: {}", employee.getEmail());
 
@@ -278,9 +300,19 @@ public class AuthService {
         employee.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         employee.setMustChangePassword(false);
         employeeRepository.save(employee);
+        auditLogService.recordAsActor(
+                "PASSWORD_FORCED_CHANGE", "auth", employee.getId(), employee.getId(), employee.getFullName(),
+                normalizeRoleForFrontend(employee.getRole()),
+                null, null, "Nhân sự hoàn tất đổi mật khẩu bắt buộc lần đầu: " + employee.getEmail()
+        );
 
         token.setUsed(true);
         passwordResetTokenRepository.save(token);
+        auditLogService.recordAsActor(
+                "PASSWORD_RESET_OTP", "auth", employee.getId(), employee.getId(), employee.getFullName(),
+                normalizeRoleForFrontend(employee.getRole()),
+                null, null, "Hoàn tất khôi phục mật khẩu bằng OTP qua Email cho " + normalizedEmail
+        );
 
         log.info("Password reset completed via email OTP for {}", normalizedEmail);
 
