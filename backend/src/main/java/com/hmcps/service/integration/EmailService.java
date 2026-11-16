@@ -164,6 +164,22 @@ public class EmailService {
         return new ArrayList<>(dispatchedLogs);
     }
 
+    /**
+     * Gửi email kiểm thử cấu hình SMTP do System Admin kích hoạt
+     */
+    public EmailDispatchResult sendDiagnosticTestEmail(String toEmail) {
+        String target = (toEmail != null && !toEmail.isBlank()) ? toEmail.trim() : senderEmail;
+        String subject = "[HMCPS] Kiểm Thử Kết Nối Email Server (SMTP Diagnostic)";
+        String content = """
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #cbd5e1; border-radius: 8px;">
+                <h3 style="color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 8px;">KIỂM THỬ DỊCH VỤ EMAIL SERVER (SMTP)</h3>
+                <p>Thao tác kiểm thử được kích hoạt từ phân hệ <strong>System Settings Update (Quản trị Hệ thống HMCPS)</strong>.</p>
+                <p>Hệ thống xác nhận kênh chuyển tiếp thông báo &amp; E-Payslip PDF hoạt động đúng định tuyến.</p>
+            </div>
+            """;
+        return sendHtmlEmailSync(target, subject, content, null, null);
+    }
+
     private void sendHtmlEmail(String to, String subject, String htmlContent, String attachmentName, byte[] attachmentBytes) {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         boolean hasRealSmtp = isLiveSmtpConfigured();
