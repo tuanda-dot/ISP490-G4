@@ -42,6 +42,10 @@ public class Project {
     // ID của Chỉ huy trưởng công trình phụ trách dự án
     private Long siteManagerId;
 
+    // Trần ngân sách chi phí Làm thêm giờ (OT) hàng tháng (VNĐ)
+    @Column(precision = 19, scale = 2)
+    private BigDecimal otBudgetCap;
+
     private LocalDate startDate;
     private LocalDate endDate;
 
