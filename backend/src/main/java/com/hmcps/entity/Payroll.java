@@ -36,7 +36,7 @@ public class Payroll {
     private BigDecimal standardWorkDays = new BigDecimal("26.00");
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(nullable = false, columnDefinition = "VARCHAR(30)")
     @Builder.Default
     private PayrollStatus status = PayrollStatus.DRAFT;
 
@@ -58,6 +58,34 @@ public class Payroll {
     private Long createdBy;
     private Long approvedBy;
     private LocalDateTime approvedAt;
+
+    @Column(length = 150)
+    private String approvedByName;
+
+    @Column(length = 150)
+    private String reviewedByName;
+
+    private LocalDateTime reviewedAt;
+
+    // Workflow 9 (BF-09): Luồng Giám đốc từ chối hạn mức ngân sách & KTT giải trình / điều chỉnh lại
+    @Column(length = 150)
+    private String rejectedByName;
+
+    private LocalDateTime rejectedAt;
+
+    @Column(length = 1000)
+    private String directorRejectionReason;
+
+    @Column(length = 500)
+    private String directorRequestedProjects;
+
+    @Column(length = 1500)
+    private String chiefAccountantExplanation;
+
+    private LocalDateTime adjustedAt;
+
+    @Column(columnDefinition = "TEXT")
+    private String adjustedProjectBudgetsJson;
 
     // Tích hợp kết nối Phần mềm Kế toán
     @Column(length = 50)

@@ -3,8 +3,10 @@ package com.hmcps.controller;
 import com.hmcps.entity.Employee;
 import com.hmcps.entity.PayrollItem;
 import com.hmcps.entity.Payslip;
+import com.hmcps.entity.PayslipInquiry;
 import com.hmcps.repository.EmployeeRepository;
 import com.hmcps.repository.PayrollItemRepository;
+import com.hmcps.repository.PayslipInquiryRepository;
 import com.hmcps.repository.PayslipRepository;
 import com.hmcps.security.UserPrincipal;
 import com.hmcps.service.integration.EmailService;
@@ -33,13 +35,14 @@ import java.util.*;
 public class PayslipController {
 
     private static final Set<String> PRIVILEGED_ROLES = Set.of(
-            "ADMIN", "SYSTEM_ADMIN", "DIRECTOR", "SUPERVISOR",
+            "DIRECTOR", "CEO", "SUPERVISOR",
             "CHIEF_ACCOUNTANT", "ACCOUNTANT", "PAYROLL_ACCOUNTANT"
     );
 
     private final PayslipRepository payslipRepository;
     private final PayrollItemRepository payrollItemRepository;
     private final EmployeeRepository employeeRepository;
+    private final PayslipInquiryRepository payslipInquiryRepository;
     private final EmailService emailService;
 
     @Data
@@ -99,6 +102,7 @@ public class PayslipController {
     /**
      * Tra cứu phiếu lương cá nhân của nhân sự theo tháng/năm (UC-24)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @GetMapping("/my-payslip")
     public ResponseEntity<PayslipDetailResponse> getMyPayslip(
             @RequestParam Long employeeId,
@@ -121,6 +125,7 @@ public class PayslipController {
     /**
      * Xác nhận mở xem phiếu lương bảo mật (ghi nhận viewedAt)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @PostMapping("/{id}/view")
     public ResponseEntity<Payslip> markPayslipAsViewed(@PathVariable Long id) {
         Payslip payslip = payslipRepository.findById(id)
@@ -134,6 +139,7 @@ public class PayslipController {
     /**
      * Bước 9 (BF-09): Người lao động xác nhận số liệu lương chính xác & hoàn tất kỳ lương
      */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @PostMapping("/{id}/confirm-accuracy")
     public ResponseEntity<Payslip> confirmPayslipAccuracy(@PathVariable Long id) {
         Payslip payslip = payslipRepository.findById(id)
@@ -146,6 +152,7 @@ public class PayslipController {
     /**
      * Gửi Phiếu lương điện tử (E-Payslip) qua Email cho 1 nhân sự cụ thể (UC-317)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @PostMapping("/send-email")
     public ResponseEntity<Map<String, Object>> sendSinglePayslipEmail(
             @RequestBody SendPayslipEmailRequest request) {
@@ -260,6 +267,7 @@ public class PayslipController {
     /**
      * Phát hành & Gửi E-Payslip hàng loạt qua Email cho toàn bộ nhân sự đủ điều kiện (Kế toán / Giám đốc)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ACCOUNTANT', 'PAYROLL_ACCOUNTANT', 'CHIEF_ACCOUNTANT', 'DIRECTOR', 'CEO')")
     @PostMapping("/send-batch")
     public ResponseEntity<Map<String, Object>> sendBatchPayslipEmails(
             @RequestBody SendBatchPayslipsRequest request) {
@@ -430,6 +438,7 @@ public class PayslipController {
     /**
      * Sinh phiếu lương tự động cho tất cả nhân sự từ một kỳ tính lương đã được duyệt
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ACCOUNTANT', 'PAYROLL_ACCOUNTANT', 'CHIEF_ACCOUNTANT', 'DIRECTOR', 'CEO')")
     @PostMapping("/generate-for-payroll/{payrollId}")
     public ResponseEntity<List<Payslip>> generatePayslipsForPayroll(
             @PathVariable Long payrollId,
@@ -475,9 +484,123 @@ public class PayslipController {
     /**
      * Xem lịch sử phiếu lương qua các tháng của nhân viên
      */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @GetMapping("/history/{employeeId}")
     public ResponseEntity<List<Payslip>> getEmployeePayslipHistory(@PathVariable Long employeeId) {
         return ResponseEntity.ok(payslipRepository.findByEmployeeIdOrderByYearDescMonthDesc(employeeId));
+    }
+
+    @Data
+    public static class CreateInquiryRequest {
+        private Long employeeId;
+        private String employeeCode;
+        private String employeeName;
+        private String period;
+        private String subject;
+        private String content;
+    }
+
+    @Data
+    public static class RespondInquiryRequest {
+        private String accountantReply;
+        private Long respondedById;
+    }
+
+    /**
+     * Lấy danh sách ticket khiếu nại / phản hồi phiếu lương từ bảng payslip_inquiries (UC-24 / BF-09 Step 8)
+     */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
+    @GetMapping("/inquiries")
+    public ResponseEntity<List<Map<String, Object>>> getAllPayslipInquiries() {
+        List<PayslipInquiry> inquiries = payslipInquiryRepository.findAll();
+        inquiries.sort(Comparator.comparing(PayslipInquiry::getId, Comparator.nullsLast(Comparator.reverseOrder())));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (PayslipInquiry inq : inquiries) {
+            Employee emp = inq.getEmployeeId() != null ? employeeRepository.findById(inq.getEmployeeId()).orElse(null) : null;
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", inq.getId());
+            item.put("employeeId", inq.getEmployeeId());
+            item.put("employeeCode", emp != null ? emp.getEmployeeCode() : "HM-" + String.format("%03d", inq.getEmployeeId() != null ? inq.getEmployeeId() : 0));
+            item.put("employeeName", emp != null ? emp.getFullName() : "Nhân sự #" + inq.getEmployeeId());
+            item.put("period", "Tháng 10/2026");
+            item.put("subject", inq.getTitle());
+            item.put("content", inq.getContent());
+            item.put("status", inq.getStatus());
+            item.put("createdAt", inq.getCreatedAt() != null ? inq.getCreatedAt().toString() : LocalDateTime.now().toString());
+            item.put("accountantReply", inq.getResponseContent());
+            item.put("repliedAt", inq.getRespondedAt() != null ? inq.getRespondedAt().toString() : null);
+            result.add(item);
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Tạo mới ticket phản hồi / khiếu nại lương lưu vào bảng payslip_inquiries (UC-24)
+     */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
+    @PostMapping("/inquiries")
+    public ResponseEntity<Map<String, Object>> createPayslipInquiry(@RequestBody CreateInquiryRequest request) {
+        if (request.getContent() == null || request.getContent().trim().isEmpty()) {
+            throw new IllegalArgumentException("Nội dung phản hồi / khiếu nại lương không được để trống!");
+        }
+        Employee emp = resolveEmployee(request.getEmployeeId(), request.getEmployeeCode(), null);
+        Long resolvedEmpId = emp != null ? emp.getId() : (request.getEmployeeId() != null ? request.getEmployeeId() : 1L);
+
+        PayslipInquiry saved = payslipInquiryRepository.save(PayslipInquiry.builder()
+                .payslipId(1L)
+                .payrollId(1L)
+                .employeeId(resolvedEmpId)
+                .title(request.getSubject() != null && !request.getSubject().trim().isEmpty() ? request.getSubject().trim() : "Phản hồi số liệu phiếu lương")
+                .content(request.getContent().trim())
+                .status("PENDING")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("id", saved.getId());
+        item.put("employeeId", resolvedEmpId);
+        item.put("employeeCode", emp != null ? emp.getEmployeeCode() : firstNonBlank(request.getEmployeeCode(), "HM-001"));
+        item.put("employeeName", emp != null ? emp.getFullName() : firstNonBlank(request.getEmployeeName(), "Nhân sự"));
+        item.put("period", firstNonBlank(request.getPeriod(), "Tháng 10/2026"));
+        item.put("subject", saved.getTitle());
+        item.put("content", saved.getContent());
+        item.put("status", saved.getStatus());
+        item.put("createdAt", saved.getCreatedAt().toString());
+        return ResponseEntity.ok(item);
+    }
+
+    /**
+     * Kế toán phản hồi & giải quyết ticket khiếu nại lương trong bảng payslip_inquiries
+     */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ACCOUNTANT', 'PAYROLL_ACCOUNTANT', 'CHIEF_ACCOUNTANT', 'DIRECTOR', 'CEO')")
+    @PutMapping("/inquiries/{id}/respond")
+    public ResponseEntity<Map<String, Object>> respondPayslipInquiry(
+            @PathVariable Long id,
+            @RequestBody RespondInquiryRequest request) {
+        if (request.getAccountantReply() == null || request.getAccountantReply().trim().isEmpty()) {
+            throw new IllegalArgumentException("Nội dung phản hồi giải quyết khiếu nại lương không được để trống!");
+        }
+        PayslipInquiry inq = payslipInquiryRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy Ticket phản hồi lương với ID: " + id));
+        inq.setResponseContent(request.getAccountantReply().trim());
+        inq.setRespondedById(request.getRespondedById() != null ? request.getRespondedById() : 3L);
+        inq.setRespondedAt(LocalDateTime.now());
+        inq.setStatus("RESOLVED");
+        PayslipInquiry saved = payslipInquiryRepository.save(inq);
+
+        Employee emp = saved.getEmployeeId() != null ? employeeRepository.findById(saved.getEmployeeId()).orElse(null) : null;
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("id", saved.getId());
+        item.put("employeeId", saved.getEmployeeId());
+        item.put("employeeCode", emp != null ? emp.getEmployeeCode() : "HM-001");
+        item.put("employeeName", emp != null ? emp.getFullName() : "Nhân sự");
+        item.put("period", "Tháng 10/2026");
+        item.put("subject", saved.getTitle());
+        item.put("content", saved.getContent());
+        item.put("status", saved.getStatus());
+        item.put("accountantReply", saved.getResponseContent());
+        item.put("repliedAt", saved.getRespondedAt().toString());
+        return ResponseEntity.ok(item);
     }
 
     private UserPrincipal currentPrincipal() {
