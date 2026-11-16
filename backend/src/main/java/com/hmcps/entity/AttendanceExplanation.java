@@ -46,15 +46,15 @@ public class AttendanceExplanation {
     @Column(columnDefinition = "TEXT")
     private String evidenceUrl;
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     @Builder.Default
-    private String siteManagerApproval = "PENDING"; // PENDING, APPROVED, REJECTED
+    private String siteManagerApproval = "PENDING"; // PENDING, APPROVED, REJECTED, NOT_REQUIRED
 
     private Long siteManagerId;
 
     private LocalDateTime siteManagerApprovedAt;
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     @Builder.Default
     private String hrApproval = "PENDING"; // PENDING, APPROVED, REJECTED
 
@@ -65,6 +65,9 @@ public class AttendanceExplanation {
     @Column(nullable = false, length = 30)
     @Builder.Default
     private String status = "PENDING_SM"; // PENDING_SM, PENDING_HR, APPROVED, REJECTED
+
+    @Column(columnDefinition = "TEXT")
+    private String rejectionReason;
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
