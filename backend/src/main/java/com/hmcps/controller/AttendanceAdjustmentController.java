@@ -51,6 +51,7 @@ public class AttendanceAdjustmentController {
     /**
      * Nộp & Phê duyệt giải trình chấm công bù (UC-11)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SITE_MANAGER', 'HR_MANAGER', 'HR_STAFF', 'HR_OFFICER')")
     @PostMapping("/adjust")
     public ResponseEntity<Attendance> adjustAttendance(@RequestBody AttendanceAdjustmentRequest request) {
         Attendance attendance = attendanceRepository.findByEmployeeIdAndWorkDate(
@@ -76,6 +77,7 @@ public class AttendanceAdjustmentController {
     /**
      * Nộp & Duyệt nghỉ phép (UC-10)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @PostMapping("/leave")
     public ResponseEntity<MonthlyTimesheet> submitLeave(@RequestBody LeaveRequestDto request) {
         MonthlyTimesheet ts = timesheetRepository.findByEmployeeIdAndMonthAndYear(
