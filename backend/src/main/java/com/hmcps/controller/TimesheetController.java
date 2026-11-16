@@ -45,6 +45,7 @@ public class TimesheetController {
     /**
      * Lấy danh sách bảng chấm công của tháng/năm
      */
+    @org.springframework.security.access.prepost.PreAuthorize("!hasAnyRole('ADMIN', 'SYSTEM_ADMIN')")
     @GetMapping
     public ResponseEntity<List<MonthlyTimesheet>> getMonthlyTimesheets(
             @RequestParam Integer month,
@@ -55,6 +56,7 @@ public class TimesheetController {
     /**
      * Phê duyệt cấp 1: Chỉ huy trưởng xác nhận công dự án (CONFIRM)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SITE_MANAGER', 'HR_MANAGER', 'HR_STAFF', 'HR_OFFICER')")
     @PostMapping("/{id}/confirm")
     public ResponseEntity<MonthlyTimesheet> confirmTimesheet(
             @PathVariable Long id,
@@ -66,6 +68,7 @@ public class TimesheetController {
     /**
      * Phê duyệt cấp 1: Chỉ huy trưởng từ chối / trả về yêu cầu HR điều chỉnh (BF-07)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SITE_MANAGER', 'HR_MANAGER', 'HR_STAFF', 'HR_OFFICER')")
     @PostMapping("/{id}/reject")
     public ResponseEntity<MonthlyTimesheet> rejectTimesheet(
             @PathVariable Long id,
@@ -79,6 +82,7 @@ public class TimesheetController {
     /**
      * Phê duyệt cấp 2: Trưởng phòng HR Khóa bảng công (LOCK)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('HR_MANAGER')")
     @PostMapping("/{id}/lock")
     public ResponseEntity<MonthlyTimesheet> lockTimesheet(
             @PathVariable Long id,
@@ -90,6 +94,7 @@ public class TimesheetController {
     /**
      * Khóa toàn bộ bảng công tháng và tự động kích hoạt tính lương (FE-05 -> FE-06)
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('HR_MANAGER')")
     @PostMapping("/lock-and-payroll")
     public ResponseEntity<String> lockAndTriggerPayroll(@RequestBody LockMonthRequest request) {
         timesheetService.lockAllTimesheetsAndTriggerPayroll(
