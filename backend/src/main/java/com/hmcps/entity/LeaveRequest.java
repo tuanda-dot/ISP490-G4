@@ -23,7 +23,11 @@ public class LeaveRequest {
     private Long employeeId;
 
     @Column(nullable = false, length = 30)
-    private String leaveType; // ANNUAL, SICK, COMPENSATORY, UNPAID, MATERNITY
+    private String leaveType; // ANNUAL, SPECIAL_PAID, SICK_SHORT, SICK_LONG, PERSONAL_TRAVEL, COMPENSATORY, BAD_WEATHER, UNPAID
+
+    @Column(length = 20)
+    @Builder.Default
+    private String halfDaySession = "FULL_DAY"; // FULL_DAY, MORNING (Sáng 0.5), AFTERNOON (Chiều 0.5)
 
     @Column(nullable = false)
     private LocalDate startDate;
@@ -37,7 +41,10 @@ public class LeaveRequest {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String reason;
 
-    @Column(nullable = false, length = 20)
+    @Column(length = 255)
+    private String attachmentName;
+
+    @Column(nullable = false, length = 30)
     @Builder.Default
     private String siteManagerApproval = "PENDING"; // PENDING, APPROVED, REJECTED, NOT_REQUIRED
 
@@ -45,7 +52,7 @@ public class LeaveRequest {
 
     private LocalDateTime siteManagerApprovedAt;
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     @Builder.Default
     private String hrApproval = "PENDING"; // PENDING, APPROVED, REJECTED
 
@@ -56,6 +63,9 @@ public class LeaveRequest {
     @Column(nullable = false, length = 30)
     @Builder.Default
     private String status = "PENDING_SM"; // PENDING_SM, PENDING_HR, APPROVED, REJECTED, CANCELLED
+
+    @Column(columnDefinition = "TEXT")
+    private String rejectionReason;
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
