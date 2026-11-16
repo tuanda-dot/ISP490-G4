@@ -1,0 +1,90 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: hmcps-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # ====================================================================
+  # 1. DỊCH VỤ EMAIL (Gmail SMTP hoặc Brevo Sendinblue Free Tier)
+  # ====================================================================
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:notification.hmcps@gmail.com}
+    password: ${MAIL_PASSWORD:xxxx-xxxx-xxxx-xxxx} # 16 ký tự Google App Password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# ====================================================================
+# CẤU HÌNH CÁC DỊCH VỤ TÍCH HỢP HMCPS (TẬP TRUNG FREE & OPEN-SOURCE)
+# ====================================================================
+hmcps:
+  jwt:
+    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    expiration-ms: 86400000 # 24 hours
+
+  # 2. Dịch vụ Chấm công GPS & OTP
+  attendance:
+    default-geofence-radius-meters: 100
+    otp-validity-hours: 24
+
+  # 3. Dịch vụ Bản đồ Số & Địa chỉ hóa (OpenStreetMap + Nominatim)
+  map:
+    provider: openstreetmap # openstreetmap | mapbox
+    tile-url: https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+    reverse-geocoding-url: https://nominatim.openstreetmap.org/reverse
+    user-agent: HMCPS-Construction-System/1.0
+
+  # 4. Lưu trữ Tệp tin MinIO Object Storage (Self-hosted trên Docker, chuẩn S3)
+  storage:
+    minio:
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ACCESS_KEY:minioadmin}
+      secret-key: ${MINIO_SECRET_KEY:minioadmin}
+      bucket-name: ${MINIO_BUCKET:hmcps-documents}
+      public-url: ${MINIO_PUBLIC_URL:http://localhost:9000}
+
+  # 5. Dịch vụ Ngân hàng & VietQR Open API
+  banking:
+    vietqr:
+      lookup-banks-url: https://api.vietqr.io/v2/banks
+      generate-qr-url: https://api.vietqr.io/v2/generate
+      client-id: ${VIETQR_CLIENT_ID:free-tier}
+      api-key: ${VIETQR_API_KEY:free-tier}
+
+  # 6. Thiết bị & Dịch vụ Chấm công Face ID (Camera Laptop / Smartphone / AI Kiosk)
+  biometric:
+    default-port: 4370
+    connection-timeout-ms: 5000
+    auto-sync-cron: "0 */15 * * * *" # Quét mỗi 15 phút (JOB-01)
+  face-id:
+    min-confidence-threshold: 0.85 # Ngưỡng tin cậy nhận diện khuôn mặt (85%)
+    liveness-detection-enabled: true # Kiểm tra khuôn mặt sống (chống ảnh giả)
+    max-snapshot-size-kb: 1024
+
+  # 7. Thông báo Đẩy Firebase Cloud Messaging (FCM)
+  firebase:
+    enabled: ${FIREBASE_ENABLED:false}
+    credentials-path: classpath:firebase-service-account.json
+
+  payroll:
+    standard-working-days: 26
+
+logging:
+  level:
+    com.hmcps: DEBUG
+    org.springframework.web: INFO
+    org.springframework.mail: DEBUG
