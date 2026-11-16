@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,7 @@ public class PayrollEngineService {
     private final ContractRepository contractRepository;
     private final MonthlyTimesheetRepository timesheetRepository;
     private final EngineerAssignmentRepository assignmentRepository;
+    private final OvertimeRequestRepository overtimeRequestRepository;
 
     private static final File BF10_STATE_FILE = new File("./target/hmcps_bf10_state.json");
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -137,6 +140,8 @@ public class PayrollEngineService {
         private BigDecimal thuNhapKhac;
         private BigDecimal truyThuThueTncn;
         private Boolean haiMinhStandardMode;
+        // Tách giờ OT theo đúng hệ số từng đơn đã duyệt/hậu kiểm (150%, 200%, 300%, ca đêm 180%)
+        private List<OvertimeRequest> approvedOvertimeItems;
     }
 
     /**
@@ -283,19 +288,83 @@ public class PayrollEngineService {
                     : phuCapCom;
         }
 
-        // Tiền lương làm thêm giờ (OT) - Đ.98.1 BLLĐ
+        // Tiền lương làm thêm giờ (OT) - Đ.98.1 & Đ.98.2 BLLĐ, Thông tư 111/2013/TT-BTC
         // Đơn giá lương giờ chuẩn = mucLuong / (congChuan x 8)
         BigDecimal hourlyRate = congChuan.compareTo(BigDecimal.ZERO) > 0
                 ? mucLuong.divide(congChuan.multiply(LaborLawConstants.STANDARD_WORK_HOURS_PER_DAY), 4, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
-        // Giả định bình quân giờ làm thêm là ngày thường (150%)
-        BigDecimal luongTangCa = overtimeHours.multiply(hourlyRate).multiply(LaborLawConstants.MULTIPLIER_OT_WEEKDAY).setScale(2, RoundingMode.HALF_UP);
-        // Phần chênh lệch lương OT vượt quá ngày thường (50% của giờ thường) được MIỄN THUẾ TNCN
-        BigDecimal chenhLechLtg = overtimeHours.multiply(hourlyRate).multiply(new BigDecimal("0.50")).setScale(2, RoundingMode.HALF_UP);
 
-        // Phụ trội ca đêm 30% (Đ.98.2 BLLĐ)
-        BigDecimal phuTroiDem = nightHours.multiply(hourlyRate).multiply(LaborLawConstants.SURCHARGE_NIGHT_SHIFT).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal phuTroiDemMienThue = phuTroiDem; // Toàn bộ phần trả cao hơn do làm đêm được miễn thuế
+        BigDecimal luongTangCa = BigDecimal.ZERO;
+        BigDecimal chenhLechLtg = BigDecimal.ZERO;
+        BigDecimal phuTroiDem = BigDecimal.ZERO;
+        BigDecimal phuTroiDemMienThue = BigDecimal.ZERO;
+
+        List<OvertimeRequest> approvedOts = input.getApprovedOvertimeItems();
+        if (approvedOts != null && !approvedOts.isEmpty()) {
+            BigDecimal itemizedDayOtHours = BigDecimal.ZERO;
+            BigDecimal itemizedNightHours = BigDecimal.ZERO;
+
+            for (OvertimeRequest ot : approvedOts) {
+                if (!"APPROVED".equalsIgnoreCase(ot.getStatus())) continue;
+                BigDecimal otH = ot.getPayableOtHours() != null
+                        ? ot.getPayableOtHours()
+                        : (ot.getOtHours() != null ? ot.getOtHours() : BigDecimal.ZERO);
+                if (otH.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                String otType = ot.getOtType() != null ? ot.getOtType().trim().toUpperCase() : "WEEKDAY_150";
+                BigDecimal mult = ot.getMultiplier();
+                if (mult == null || mult.compareTo(BigDecimal.ZERO) <= 0) {
+                    mult = switch (otType) {
+                        case "HOLIDAY_300" -> LaborLawConstants.MULTIPLIER_OT_HOLIDAY;
+                        case "WEEKEND_200" -> LaborLawConstants.MULTIPLIER_OT_WEEKEND;
+                        case "NIGHT_SHIFT_ADDITIONAL" -> new BigDecimal("1.80");
+                        default -> LaborLawConstants.MULTIPLIER_OT_WEEKDAY;
+                    };
+                }
+
+                if ("NIGHT_SHIFT_ADDITIONAL".equals(otType)) {
+                    // Ca đêm OT: 150% OT (trong đó 50% miễn thuế) + 30% phụ trội đêm (toàn bộ 30% miễn thuế)
+                    BigDecimal baseOtPay = otH.multiply(hourlyRate).multiply(LaborLawConstants.MULTIPLIER_OT_WEEKDAY);
+                    BigDecimal nightExtra = otH.multiply(hourlyRate).multiply(LaborLawConstants.SURCHARGE_NIGHT_SHIFT);
+                    luongTangCa = luongTangCa.add(baseOtPay);
+                    chenhLechLtg = chenhLechLtg.add(otH.multiply(hourlyRate).multiply(new BigDecimal("0.50")));
+                    phuTroiDem = phuTroiDem.add(nightExtra);
+                    phuTroiDemMienThue = phuTroiDemMienThue.add(nightExtra);
+                    itemizedNightHours = itemizedNightHours.add(otH);
+                } else {
+                    // Ngày thường 150% (miễn 50%), Cuối tuần 200% (miễn 100%), Ngày lễ 300% (miễn 200%)
+                    BigDecimal pay = otH.multiply(hourlyRate).multiply(mult);
+                    BigDecimal exemptRatio = mult.subtract(BigDecimal.ONE).max(BigDecimal.ZERO);
+                    luongTangCa = luongTangCa.add(pay);
+                    chenhLechLtg = chenhLechLtg.add(otH.multiply(hourlyRate).multiply(exemptRatio));
+                    itemizedDayOtHours = itemizedDayOtHours.add(otH);
+                }
+            }
+
+            // Cộng phần giờ dư từ máy chấm công (nếu có) chưa gắn đơn chi tiết ở mức cơ sở
+            BigDecimal residualOt = overtimeHours.subtract(itemizedDayOtHours).max(BigDecimal.ZERO);
+            if (residualOt.compareTo(BigDecimal.ZERO) > 0) {
+                luongTangCa = luongTangCa.add(residualOt.multiply(hourlyRate).multiply(LaborLawConstants.MULTIPLIER_OT_WEEKDAY));
+                chenhLechLtg = chenhLechLtg.add(residualOt.multiply(hourlyRate).multiply(new BigDecimal("0.50")));
+            }
+            BigDecimal residualNight = nightHours.subtract(itemizedNightHours).max(BigDecimal.ZERO);
+            if (residualNight.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal resNightPay = residualNight.multiply(hourlyRate).multiply(LaborLawConstants.SURCHARGE_NIGHT_SHIFT);
+                phuTroiDem = phuTroiDem.add(resNightPay);
+                phuTroiDemMienThue = phuTroiDemMienThue.add(resNightPay);
+            }
+
+            luongTangCa = luongTangCa.setScale(2, RoundingMode.HALF_UP);
+            chenhLechLtg = chenhLechLtg.setScale(2, RoundingMode.HALF_UP);
+            phuTroiDem = phuTroiDem.setScale(2, RoundingMode.HALF_UP);
+            phuTroiDemMienThue = phuTroiDemMienThue.setScale(2, RoundingMode.HALF_UP);
+        } else {
+            // Fallback khi chưa có danh sách đơn OvertimeRequest chi tiết (chấm công máy mặc định 150% + đêm 30%)
+            luongTangCa = overtimeHours.multiply(hourlyRate).multiply(LaborLawConstants.MULTIPLIER_OT_WEEKDAY).setScale(2, RoundingMode.HALF_UP);
+            chenhLechLtg = overtimeHours.multiply(hourlyRate).multiply(new BigDecimal("0.50")).setScale(2, RoundingMode.HALF_UP);
+            phuTroiDem = nightHours.multiply(hourlyRate).multiply(LaborLawConstants.SURCHARGE_NIGHT_SHIFT).setScale(2, RoundingMode.HALF_UP);
+            phuTroiDemMienThue = phuTroiDem;
+        }
 
         BigDecimal thuongDuAn = input.getThuongDuAn() != null ? input.getThuongDuAn() : BigDecimal.ZERO;
         BigDecimal rawTongThuNhap = thuNhapChinh.add(luongTangCa).add(phuTroiDem).add(thuongDuAn).add(hoanThueTncn).add(thuNhapKhac);
@@ -612,6 +681,8 @@ public class PayrollEngineService {
         BigDecimal totalGross = BigDecimal.ZERO;
         BigDecimal totalNet = BigDecimal.ZERO;
         BigDecimal totalEmployerCost = BigDecimal.ZERO;
+        LocalDate periodStart = LocalDate.of(year, month, 1);
+        LocalDate periodEnd = YearMonth.of(year, month).atEndOfMonth();
 
         for (MonthlyTimesheet ts : timesheets) {
             Employee emp = employeeRepository.findById(ts.getEmployeeId()).orElse(null);
@@ -625,6 +696,11 @@ public class PayrollEngineService {
 
             // Đọc phụ cấp công trường động từ cấu hình BF-10
             ProjectAllowanceSnapshot allowances = resolveProjectAllowances(emp);
+            List<OvertimeRequest> approvedOtItems = overtimeRequestRepository
+                    .findByEmployeeIdAndWorkDateBetween(emp.getId(), periodStart, periodEnd)
+                    .stream()
+                    .filter(ot -> "APPROVED".equalsIgnoreCase(ot.getStatus()))
+                    .toList();
 
             PayrollCalculationInput input = PayrollCalculationInput.builder()
                     .employee(emp)
@@ -644,6 +720,7 @@ public class PayrollEngineService {
                     .tyLeHieuQua(emp.getEvaluationPct())
                     .haiMinhStandardMode(emp.getPerformanceSalary() != null)
                     .thuongDuAn(BigDecimal.ZERO)
+                    .approvedOvertimeItems(approvedOtItems)
                     .build();
 
             PayrollItem item = calculatePayrollItem(payroll.getId(), input);
