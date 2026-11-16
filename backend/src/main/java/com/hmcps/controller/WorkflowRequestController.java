@@ -1,6 +1,5 @@
 package com.hmcps.controller;
 
-import com.hmcps.common.constants.LaborLawConstants;
 import com.hmcps.common.enums.AttendanceStatus;
 import com.hmcps.common.exception.BusinessException;
 import com.hmcps.common.util.StatutoryHolidayUtils;
@@ -52,7 +51,7 @@ public class WorkflowRequestController {
     private static final Map<Long, ExplanationDto> explanationMap = new ConcurrentHashMap<>();
 
     static {
-        // Seed initial Overtime & Night Duty Requests (Trưởng phòng / CHT lập & duyệt trực tiếp 1 bước; 150% ngày thường/đêm/cuối tuần, 200% Lễ/Tết; Trực đêm = 1.5 công)
+        // Seed initial Overtime Requests (Phương án B: Trưởng phòng / CHT lập -> Giám đốc duyệt chủ trương -> HR/Kế toán hậu kiểm Face ID)
         overtimeMap.put(1L, OvertimeDto.builder()
                 .id(1L)
                 .employeeId(6L)
@@ -64,26 +63,25 @@ public class WorkflowRequestController {
                 .createdByName("Nguyễn Lê Gia Phát")
                 .createdByRole("SITE_MANAGER")
                 .workDate("2026-10-21")
-                .startTime("22:00")
-                .endTime("05:00")
-                .otHours(7.0)
-                .otType("SITE_NIGHT_DUTY")
-                .multiplier(0.0)
-                .isNightDuty(true)
-                .nightDutyConvertedDays(1.5)
-                .reason("Trực đêm công trường giám sát đổ bê tông dầm cầu nhịp chính K14 (22h00 - 05h00).")
-                .directorApproval("NOT_REQUIRED")
-                .siteManagerApproval("PENDING")
-                .hrApproval("NOT_REQUIRED")
-                .actualFaceIdHours(7.0)
-                .payableOtHours(0.0)
-                .faceIdReconcileStatus("MATCHED")
-                .faceIdCheckIn("22:00")
-                .faceIdCheckOut("05:00 (+1)")
-                .faceIdNote("Trực đêm công trường (22h00 - 05h00): 01 buổi = 1,5 ngày công, hôm sau nghỉ bù.")
-                .estimatedCost(0.0)
+                .startTime("21:00")
+                .endTime("03:00")
+                .otHours(6.0)
+                .otType("NIGHT_SHIFT_ADDITIONAL")
+                .multiplier(1.8)
+                .reason("Trực kỹ thuật giám sát đổ bê tông dầm cầu nhịp chính K14 ca đêm.")
+                .directorApproval("APPROVED")
+                .directorApprovedAt("2026-10-21 15:00")
+                .siteManagerApproval("CREATED_BY_SM")
+                .hrApproval("PENDING")
+                .actualFaceIdHours(4.5)
+                .payableOtHours(4.5)
+                .faceIdReconcileStatus("PARTIAL")
+                .faceIdCheckIn("07:05")
+                .faceIdCheckOut("01:30 (+1)")
+                .faceIdNote("Log Face ID check-out 01:30 (chỉ ghi nhận 4.5h ca đêm so với 6.0h đăng ký).")
+                .estimatedCost(1142308.0)
                 .budgetCapAtCreation(25000000.0)
-                .status("PENDING_MANAGER")
+                .status("PENDING_RECONCILIATION")
                 .createdAt("2026-10-21 09:30")
                 .build());
 
@@ -103,16 +101,15 @@ public class WorkflowRequestController {
                 .otHours(4.0)
                 .otType("WEEKDAY_150")
                 .multiplier(1.5)
-                .isNightDuty(false)
-                .nightDutyConvertedDays(0.0)
-                .reason("Kéo cáp dự ứng lực khoang nhịp K12 ban đêm.")
-                .directorApproval("NOT_REQUIRED")
-                .siteManagerApproval("APPROVED")
-                .hrApproval("NOT_REQUIRED")
-                .reconciledById(5L)
-                .reconciledByName("Nguyễn Lê Gia Phát")
-                .reconciledByRole("SITE_MANAGER")
-                .reconciledAt("2026-10-22 10:15")
+                .reason("Kéo cáp dự ứng lực khoang nhịp K12 ban đêm để tránh giãn nở nhiệt.")
+                .directorApproval("APPROVED")
+                .directorApprovedAt("2026-10-22 10:15")
+                .siteManagerApproval("CREATED_BY_SM")
+                .hrApproval("APPROVED")
+                .reconciledById(4L)
+                .reconciledByName("Nguyễn Thu Giang")
+                .reconciledByRole("HR_MANAGER")
+                .reconciledAt("2026-10-23 09:10")
                 .actualFaceIdHours(4.0)
                 .payableOtHours(4.0)
                 .faceIdReconcileStatus("MATCHED")
@@ -139,25 +136,24 @@ public class WorkflowRequestController {
                 .startTime("08:00")
                 .endTime("17:00")
                 .otHours(8.0)
-                .otType("WEEKEND_150")
-                .multiplier(1.5)
-                .isNightDuty(false)
-                .nightDutyConvertedDays(0.0)
+                .otType("WEEKEND_200")
+                .multiplier(2.0)
                 .reason("Trực chỉ huy cứu hộ đê bao & an toàn thi công trụ cầu ngày Chủ Nhật.")
-                .directorApproval("NOT_REQUIRED")
-                .siteManagerApproval("APPROVED")
-                .hrApproval("NOT_REQUIRED")
-                .reconciledById(5L)
-                .reconciledByName("Nguyễn Lê Gia Phát")
-                .reconciledByRole("SITE_MANAGER")
-                .reconciledAt("2026-10-18 17:30")
+                .directorApproval("APPROVED")
+                .directorApprovedAt("2026-10-17 17:00")
+                .siteManagerApproval("CREATED_BY_SM")
+                .hrApproval("APPROVED")
+                .reconciledById(4L)
+                .reconciledByName("Nguyễn Thu Giang")
+                .reconciledByRole("HR_MANAGER")
+                .reconciledAt("2026-10-19 09:45")
                 .actualFaceIdHours(8.0)
                 .payableOtHours(8.0)
                 .faceIdReconcileStatus("MATCHED")
                 .faceIdCheckIn("08:00")
                 .faceIdCheckOut("17:02")
-                .faceIdNote("Khớp Face ID Chủ nhật 8.0h (sau khi trừ 1h nghỉ trưa) - hệ số 150%.")
-                .estimatedCost(1846154.0)
+                .faceIdNote("Khớp Face ID Chủ nhật 8.0h (sau khi trừ 1h nghỉ trưa).")
+                .estimatedCost(2461538.0)
                 .budgetCapAtCreation(25000000.0)
                 .status("APPROVED")
                 .createdAt("2026-10-17 14:00")
@@ -179,17 +175,15 @@ public class WorkflowRequestController {
                 .otHours(3.0)
                 .otType("WEEKDAY_150")
                 .multiplier(1.5)
-                .isNightDuty(false)
-                .nightDutyConvertedDays(0.0)
                 .reason("Khảo sát trắc địa tim trục dầm thép tầng chuyển kết cấu.")
-                .directorApproval("NOT_REQUIRED")
-                .siteManagerApproval("PENDING")
-                .hrApproval("NOT_REQUIRED")
+                .directorApproval("PENDING")
+                .siteManagerApproval("CREATED_BY_SM")
+                .hrApproval("PENDING")
                 .payableOtHours(3.0)
                 .faceIdReconcileStatus("PENDING_SHIFT")
                 .estimatedCost(475962.0)
                 .budgetCapAtCreation(25000000.0)
-                .status("PENDING_MANAGER")
+                .status("PENDING_DIRECTOR")
                 .createdAt("2026-10-21 11:20")
                 .build());
 
@@ -207,25 +201,24 @@ public class WorkflowRequestController {
                 .startTime("08:00")
                 .endTime("17:00")
                 .otHours(8.0)
-                .otType("WEEKEND_150")
-                .multiplier(1.5)
-                .isNightDuty(false)
-                .nightDutyConvertedDays(0.0)
+                .otType("WEEKEND_200")
+                .multiplier(2.0)
                 .reason("Trực giám sát đổ bê tông bản mặt cầu nhịp K12 ngày Chủ Nhật.")
-                .directorApproval("NOT_REQUIRED")
-                .siteManagerApproval("APPROVED")
-                .hrApproval("NOT_REQUIRED")
-                .reconciledById(5L)
-                .reconciledByName("Nguyễn Lê Gia Phát")
-                .reconciledByRole("SITE_MANAGER")
+                .directorApproval("APPROVED")
+                .directorApprovedAt("2026-10-10 17:30")
+                .siteManagerApproval("CREATED_BY_SM")
+                .hrApproval("APPROVED")
+                .reconciledById(4L)
+                .reconciledByName("Nguyễn Thu Giang")
+                .reconciledByRole("HR_MANAGER")
                 .reconciledAt("2026-10-12 09:00")
                 .actualFaceIdHours(8.0)
                 .payableOtHours(8.0)
                 .faceIdReconcileStatus("MATCHED")
                 .faceIdCheckIn("08:00")
                 .faceIdCheckOut("17:00")
-                .faceIdNote("Khớp dữ liệu Face ID Chủ nhật 8.0h - hệ số 150%.")
-                .estimatedCost(1269231.0)
+                .faceIdNote("Khớp dữ liệu Face ID Chủ nhật 8.0h.")
+                .estimatedCost(1692308.0)
                 .budgetCapAtCreation(25000000.0)
                 .status("APPROVED")
                 .createdAt("2026-10-10 15:00")
@@ -247,40 +240,37 @@ public class WorkflowRequestController {
                 .otHours(3.0)
                 .otType("WEEKDAY_150")
                 .multiplier(1.5)
-                .isNightDuty(false)
-                .nightDutyConvertedDays(0.0)
                 .reason("Tổng hợp hồ sơ quyết toán lương & đối chiếu chứng từ văn phòng tháng 10.")
-                .directorApproval("NOT_REQUIRED")
+                .directorApproval("PENDING")
                 .siteManagerApproval("NOT_REQUIRED")
                 .hrApproval("PENDING")
                 .payableOtHours(3.0)
                 .faceIdReconcileStatus("PENDING_SHIFT")
                 .estimatedCost(350000.0)
                 .budgetCapAtCreation(12000000.0)
-                .status("PENDING_MANAGER")
+                .status("PENDING_DIRECTOR")
                 .createdAt("2026-10-21 14:15")
                 .build());
 
         overtimeMap.put(7L, OvertimeDto.builder()
                 .id(7L)
-                .employeeId(16L)
-                .employeeCode("HM-016")
-                .employeeName("Hoàng Thị Lan")
+                .employeeId(4L)
+                .employeeCode("HM-004")
+                .employeeName("Nguyễn Thu Giang")
                 .projectId(0L)
                 .projectName("Văn Phòng Trụ Sở Chính HQ (TK 642)")
-                .createdById(2L)
-                .createdByName("Đoàn Anh Tuấn")
-                .createdByRole("CHIEF_ACCOUNTANT")
+                .createdById(4L)
+                .createdByName("Nguyễn Thu Giang")
+                .createdByRole("HR_MANAGER")
                 .workDate("2026-10-20")
                 .startTime("17:30")
                 .endTime("20:30")
                 .otHours(3.0)
                 .otType("WEEKDAY_150")
                 .multiplier(1.5)
-                .isNightDuty(false)
-                .nightDutyConvertedDays(0.0)
-                .reason("Hoàn thiện hồ sơ đối chiếu bảng lương và chứng từ MISA tháng 10.")
-                .directorApproval("NOT_REQUIRED")
+                .reason("Hoàn thiện hồ sơ đánh giá nhân sự và chuẩn hóa dữ liệu bảo hiểm tháng 10.")
+                .directorApproval("APPROVED")
+                .directorApprovedAt("2026-10-20 15:10")
                 .siteManagerApproval("NOT_REQUIRED")
                 .hrApproval("PENDING")
                 .actualFaceIdHours(3.0)
@@ -288,10 +278,10 @@ public class WorkflowRequestController {
                 .faceIdReconcileStatus("MATCHED")
                 .faceIdCheckIn("08:02")
                 .faceIdCheckOut("20:35")
-                .faceIdNote("Khớp log Face ID Trụ sở chính HQ (3.0h OT). Chờ Trưởng phòng duyệt trực tiếp.")
-                .estimatedCost(575000.0)
+                .faceIdNote("Khớp log Face ID Trụ sở chính HQ (3.0h OT). Chờ Kế toán hoặc nhân sự độc lập đối soát.")
+                .estimatedCost(650000.0)
                 .budgetCapAtCreation(12000000.0)
-                .status("PENDING_MANAGER")
+                .status("PENDING_RECONCILIATION")
                 .createdAt("2026-10-20 11:00")
                 .build());
 
@@ -302,11 +292,10 @@ public class WorkflowRequestController {
                 .employeeCode("HM-004")
                 .employeeName("Nguyễn Thu Giang")
                 .leaveType("ANNUAL")
-                .halfDaySession("FULL_DAY")
                 .startDate("2026-10-27")
                 .endDate("2026-10-28")
                 .daysCount(2.0)
-                .reason("Nghỉ phép thường niên (trong hạn mức 4 ngày/tháng).")
+                .reason("Nghỉ phép thường niên theo quy định công ty.")
                 .attachmentName("Don_xin_nghi_phep_HM004.pdf")
                 .siteManagerApproval("NOT_REQUIRED")
                 .hrApproval("APPROVED")
@@ -320,11 +309,10 @@ public class WorkflowRequestController {
                 .employeeCode("HM-006")
                 .employeeName("Trần Văn Trung")
                 .leaveType("COMPENSATORY")
-                .halfDaySession("FULL_DAY")
                 .startDate("2026-10-24")
                 .endDate("2026-10-24")
                 .daysCount(1.0)
-                .reason("Nghỉ bù sau ca trực đêm 21/10 tại công trường Cầu Nhật Tân 2.")
+                .reason("Nghỉ bù sau ca trực đổ bê tông đêm 21/10 tại công trường Cầu Nhật Tân 2.")
                 .attachmentName("Lich_truc_ca_dem_21_10_CT.pdf")
                 .siteManagerApproval("PENDING")
                 .hrApproval("PENDING")
@@ -337,13 +325,12 @@ public class WorkflowRequestController {
                 .employeeId(7L)
                 .employeeCode("HM-007")
                 .employeeName("Phạm Thành Nam")
-                .leaveType("SICK_SHORT")
-                .halfDaySession("FULL_DAY")
+                .leaveType("SICK")
                 .startDate("2026-10-15")
                 .endDate("2026-10-16")
                 .daysCount(2.0)
-                .reason("Nghỉ ốm ngắn ngày (<= 2 ngày/tháng - Công ty tự chi trả, không trừ lương).")
-                .attachmentName("Giay_kham_benh_vien_HM007.jpg")
+                .reason("Khám sức khỏe và điều trị tại bệnh viện (đã nộp giấy nghỉ hưởng BHXH).")
+                .attachmentName("Giay_chung_nhan_BHXH_C65_HD_HM007.jpg")
                 .siteManagerApproval("APPROVED")
                 .hrApproval("APPROVED")
                 .status("APPROVED")
@@ -493,15 +480,12 @@ public class WorkflowRequestController {
         private Double otHours;
         private String otType;
         private Double multiplier;
-        private Boolean isNightDuty;
-        private Double nightDutyConvertedDays;
-        private Boolean autoApprove;
         private String reason;
-        private String directorApproval;    // NOT_REQUIRED
+        private String directorApproval;    // PENDING, APPROVED, REJECTED
         private String directorApprovedAt;
         private Boolean budgetOverrideApproved;
-        private String siteManagerApproval; // NOT_REQUIRED, PENDING, APPROVED, REJECTED
-        private String hrApproval;          // NOT_REQUIRED, PENDING, APPROVED, REJECTED
+        private String siteManagerApproval; // NOT_REQUIRED, CREATED_BY_SM, PENDING, APPROVED, REJECTED
+        private String hrApproval;          // PENDING, APPROVED, REJECTED
         private Long reconciledById;
         private String reconciledByName;
         private String reconciledByRole;
@@ -516,7 +500,7 @@ public class WorkflowRequestController {
         private Double budgetCapAtCreation;
         private Double projectedProjectOtCost;
         private Boolean isBudgetOverrun;
-        private String status;              // PENDING_MANAGER, APPROVED, REJECTED
+        private String status;              // PENDING_DIRECTOR, PENDING_RECONCILIATION, APPROVED, REJECTED
         private String rejectionReason;
         private String createdAt;
     }
@@ -663,19 +647,11 @@ public class WorkflowRequestController {
         } catch (Exception ignored) {
         }
 
-        if ("SITE_NIGHT_DUTY".equalsIgnoreCase(dto.getOtType()) || Boolean.TRUE.equals(dto.getIsNightDuty())) {
-            dto.setIsNightDuty(true);
-            dto.setNightDutyConvertedDays(LaborLawConstants.SITE_NIGHT_DUTY_DAYS_CONVERSION.doubleValue());
-            dto.setMultiplier(0.0);
-            dto.setPayableOtHours(0.0);
-            dto.setEstimatedCost(0.0);
-        } else {
-            if (dto.getPayableOtHours() == null) {
-                dto.setPayableOtHours(effectivePayableHours);
-            }
-            if (dto.getEstimatedCost() == null || !"APPROVED".equalsIgnoreCase(dto.getStatus())) {
-                dto.setEstimatedCost(resolveEmployeeOtCost(dto.getEmployeeId(), dto.getEmployeeCode(), isOffice, effectivePayableHours, mult));
-            }
+        if (dto.getPayableOtHours() == null) {
+            dto.setPayableOtHours(effectivePayableHours);
+        }
+        if (dto.getEstimatedCost() == null || !"APPROVED".equalsIgnoreCase(dto.getStatus())) {
+            dto.setEstimatedCost(resolveEmployeeOtCost(dto.getEmployeeId(), dto.getEmployeeCode(), isOffice, effectivePayableHours, mult));
         }
         double cap = resolveProjectOtCap(dto.getProjectId());
         dto.setBudgetCapAtCreation(cap);
@@ -763,75 +739,6 @@ public class WorkflowRequestController {
         return ResponseEntity.ok(summary);
     }
 
-    private long countMonthlyNightDutySessions(Long employeeId, String employeeCode, String ymPrefix, Long excludeId) {
-        return overtimeMap.values().stream()
-                .filter(o -> excludeId == null || !excludeId.equals(o.getId()))
-                .filter(o -> !"REJECTED".equalsIgnoreCase(o.getStatus()))
-                .filter(o -> (employeeId != null && employeeId.equals(o.getEmployeeId()))
-                        || (employeeCode != null && employeeCode.equalsIgnoreCase(o.getEmployeeCode())))
-                .filter(o -> o.getWorkDate() != null && o.getWorkDate().startsWith(ymPrefix))
-                .filter(o -> "SITE_NIGHT_DUTY".equalsIgnoreCase(o.getOtType()) || Boolean.TRUE.equals(o.getIsNightDuty()))
-                .count();
-    }
-
-    private void finalizeApprovedOvertime(
-            OvertimeDto req,
-            Long approverId,
-            String approverName,
-            String approverRole,
-            Double overridePayableHours,
-            String note
-    ) {
-        boolean isOfficeReq = (req.getProjectId() == null || req.getProjectId() == 0L);
-        boolean isNightDuty = "SITE_NIGHT_DUTY".equalsIgnoreCase(req.getOtType()) || Boolean.TRUE.equals(req.getIsNightDuty());
-
-        req.setDirectorApproval("NOT_REQUIRED");
-        req.setSiteManagerApproval(isOfficeReq ? "NOT_REQUIRED" : "APPROVED");
-        req.setHrApproval(isOfficeReq ? "APPROVED" : "NOT_REQUIRED");
-        req.setReconciledById(approverId);
-        req.setReconciledByName(approverName);
-        req.setReconciledByRole(approverRole);
-        req.setReconciledAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-        req.setStatus("APPROVED");
-
-        if (isNightDuty) {
-            req.setIsNightDuty(true);
-            req.setNightDutyConvertedDays(LaborLawConstants.SITE_NIGHT_DUTY_DAYS_CONVERSION.doubleValue());
-            req.setPayableOtHours(0.0);
-            req.setEstimatedCost(0.0);
-        } else {
-            double reqHours = req.getOtHours() != null ? req.getOtHours() : 0.0;
-            double payableHours = overridePayableHours != null
-                    ? Math.max(0.0, Math.min(reqHours, overridePayableHours))
-                    : (req.getActualFaceIdHours() != null ? Math.min(reqHours, req.getActualFaceIdHours()) : reqHours);
-            double mult = req.getMultiplier() != null ? req.getMultiplier() : 1.5;
-            req.setPayableOtHours(payableHours);
-            req.setEstimatedCost(resolveEmployeeOtCost(req.getEmployeeId(), req.getEmployeeCode(), isOfficeReq, payableHours, mult));
-        }
-        if (note != null && !note.isBlank()) {
-            req.setFaceIdNote(note.trim());
-        }
-
-        try {
-            LocalDate d = LocalDate.parse(req.getWorkDate());
-            MonthlyTimesheet ts = timesheetRepository.findByEmployeeIdAndMonthAndYear(
-                    req.getEmployeeId(), d.getMonthValue(), d.getYear()).orElse(null);
-            if (ts != null) {
-                if (isNightDuty) {
-                    BigDecimal converted = LaborLawConstants.SITE_NIGHT_DUTY_DAYS_CONVERSION;
-                    ts.setActualWorkDays(ts.getActualWorkDays().add(converted));
-                    ts.setOfficialWorkDays(ts.getOfficialWorkDays().add(converted));
-                    timesheetRepository.save(ts);
-                } else if (req.getPayableOtHours() != null && req.getPayableOtHours() > 0) {
-                    BigDecimal hours = BigDecimal.valueOf(req.getPayableOtHours());
-                    ts.setOvertimeHours(ts.getOvertimeHours().add(hours));
-                    timesheetRepository.save(ts);
-                }
-            }
-        } catch (Exception ignored) {
-        }
-    }
-
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('HR_MANAGER', 'CHIEF_ACCOUNTANT', 'SITE_MANAGER')")
     @PostMapping("/requests/overtime")
     public ResponseEntity<OvertimeDto> createOvertimeRequest(@RequestBody OvertimeDto req) {
@@ -848,38 +755,27 @@ public class WorkflowRequestController {
             throw new BusinessException("Định dạng ngày làm thêm giờ (workDate) không hợp lệ!");
         }
 
+        String startTimeStr = (req.getStartTime() != null && !req.getStartTime().isBlank())
+                ? req.getStartTime().trim()
+                : "18:00";
         String resolvedOtType = (req.getOtType() != null && !req.getOtType().isBlank())
                 ? req.getOtType().trim().toUpperCase()
                 : (StatutoryHolidayUtils.isStatutoryHoliday(parsedWorkDate)
-                        ? "HOLIDAY_200"
-                        : (parsedWorkDate.getDayOfWeek() == java.time.DayOfWeek.SUNDAY
-                                || parsedWorkDate.getDayOfWeek() == java.time.DayOfWeek.SATURDAY)
-                                ? "WEEKEND_150"
+                        ? "HOLIDAY_300"
+                        : parsedWorkDate.getDayOfWeek() == java.time.DayOfWeek.SUNDAY
+                                ? "WEEKEND_200"
                                 : "WEEKDAY_150");
-
-        boolean isNightDuty = "SITE_NIGHT_DUTY".equalsIgnoreCase(resolvedOtType);
-        String startTimeStr = (req.getStartTime() != null && !req.getStartTime().isBlank())
-                ? req.getStartTime().trim()
-                : (isNightDuty ? "22:00" : "18:00");
-        String endTimeStr = (req.getEndTime() != null && !req.getEndTime().isBlank())
-                ? req.getEndTime().trim()
-                : (isNightDuty ? "05:00" : null);
 
         double canonicalMultiplier = StatutoryHolidayUtils.validateOvertimeAndResolveMultiplier(
                 parsedWorkDate,
                 startTimeStr,
-                endTimeStr,
+                req.getEndTime(),
                 resolvedOtType,
                 req.getOtHours()
         );
         req.setStartTime(startTimeStr);
-        if (endTimeStr != null) {
-            req.setEndTime(endTimeStr);
-        }
         req.setOtType(resolvedOtType);
         req.setMultiplier(canonicalMultiplier);
-        req.setIsNightDuty(isNightDuty);
-        req.setNightDutyConvertedDays(isNightDuty ? LaborLawConstants.SITE_NIGHT_DUTY_DAYS_CONVERSION.doubleValue() : 0.0);
 
         // Fill employee & verify maker scope
         if (req.getEmployeeCode() != null && !req.getEmployeeCode().isBlank()) {
@@ -901,22 +797,10 @@ public class WorkflowRequestController {
 
         boolean isOfficeTarget = isOfficeStaffEmployee(req.getEmployeeId(), req.getEmployeeCode(), req.getProjectId());
         if ("SITE_MANAGER".equals(callerShortRole) && isOfficeTarget) {
-            throw new BusinessException("Từ chối phân quyền: Chỉ huy trưởng công trường chỉ được phép lập đơn OT / Trực đêm cho Kỹ sư công trường hoặc chính mình (không lập cho Khối Văn phòng HQ)!");
+            throw new BusinessException("Từ chối phân quyền: Chỉ huy trưởng công trường chỉ được phép lập đơn OT cho Kỹ sư công trường hoặc chính mình (không lập cho Khối Văn phòng HQ)!");
         }
         if (("HR_MANAGER".equals(callerShortRole) || "CHIEF_ACCOUNTANT".equals(callerShortRole)) && !isOfficeTarget) {
             throw new BusinessException("Từ chối phân quyền: Trưởng phòng khối Văn phòng chỉ được lập đơn OT cho nhân sự khối Văn phòng / phòng ban của mình!");
-        }
-        if (isNightDuty && isOfficeTarget) {
-            throw new BusinessException("Nghiệp vụ Trực đêm công trường (22h00 - 05h00, quy đổi 1.5 ngày công) chỉ áp dụng cho Kỹ sư / Nhân sự công trường!");
-        }
-
-        String ymPrefix = parsedWorkDate.toString().substring(0, 7);
-        if (isNightDuty) {
-            long existingNightCount = countMonthlyNightDutySessions(req.getEmployeeId(), req.getEmployeeCode(), ymPrefix, null);
-            if (existingNightCount >= LaborLawConstants.MAX_SITE_NIGHT_DUTY_PER_MONTH) {
-                throw new BusinessException("Vượt giới hạn Trực đêm công trường: Mỗi nhân sự chỉ được trực tối đa "
-                        + LaborLawConstants.MAX_SITE_NIGHT_DUTY_PER_MONTH + " buổi đêm/tháng (đã có " + existingNightCount + "/10 buổi trong tháng " + ymPrefix + ")!");
-            }
         }
 
         // Chặn tạo trùng lặp đơn OT trong cùng ngày và cùng loại ca OT cho cùng 1 nhân sự
@@ -928,7 +812,7 @@ public class WorkflowRequestController {
                         && resolvedOtType.equalsIgnoreCase(existing.getOtType())
         );
         if (duplicateOt) {
-            throw new BusinessException("Lỗi trùng lặp đơn OT: Nhân sự đã có đơn đăng ký tăng ca / trực đêm ngày " + parsedWorkDate + " (" + resolvedOtType + ") đang chờ duyệt hoặc đã phê duyệt!");
+            throw new BusinessException("Lỗi trùng lặp đơn OT: Nhân sự đã có đơn đăng ký tăng ca ngày " + parsedWorkDate + " (" + resolvedOtType + ") đang chờ duyệt hoặc đã phê duyệt!");
         }
 
         Long id = ID_GEN.incrementAndGet();
@@ -943,12 +827,10 @@ public class WorkflowRequestController {
             projectRepository.findById(targetPid).ifPresent(p -> req.setProjectName(p.getName()));
         }
 
-        double otHours = req.getOtHours() != null ? req.getOtHours() : (isNightDuty ? 7.0 : 4.0);
-        req.setOtHours(otHours);
-        double estCost = isNightDuty
-                ? 0.0
-                : resolveEmployeeOtCost(req.getEmployeeId(), req.getEmployeeCode(), isOfficeTarget, otHours, canonicalMultiplier);
+        double otHours = req.getOtHours() != null ? req.getOtHours() : 4.0;
+        double estCost = resolveEmployeeOtCost(req.getEmployeeId(), req.getEmployeeCode(), isOfficeTarget, otHours, canonicalMultiplier);
         double cap = resolveProjectOtCap(req.getProjectId());
+        String ymPrefix = parsedWorkDate.toString().substring(0, 7);
         double existingProjCost = overtimeMap.values().stream()
                 .peek(this::enrichOtWithFaceIdAndBudget)
                 .filter(o -> !"REJECTED".equalsIgnoreCase(o.getStatus()))
@@ -961,31 +843,17 @@ public class WorkflowRequestController {
         req.setCreatedById(caller != null ? caller.getId() : req.getEmployeeId());
         req.setCreatedByName(caller != null ? caller.getFullName() : "Trưởng phòng / CHT");
         req.setCreatedByRole(callerShortRole);
-        req.setDirectorApproval("NOT_REQUIRED");
-        req.setSiteManagerApproval(isOfficeTarget ? "NOT_REQUIRED" : "PENDING");
-        req.setHrApproval(isOfficeTarget ? "PENDING" : "NOT_REQUIRED");
-        req.setPayableOtHours(isNightDuty ? 0.0 : otHours);
+        req.setDirectorApproval("PENDING");
+        req.setSiteManagerApproval(isOfficeTarget ? "NOT_REQUIRED" : "CREATED_BY_SM");
+        req.setHrApproval("PENDING");
+        req.setPayableOtHours(otHours);
         req.setFaceIdReconcileStatus(parsedWorkDate.isAfter(LocalDate.now()) ? "PENDING_SHIFT" : "MISSING");
         req.setEstimatedCost(estCost);
         req.setBudgetCapAtCreation(cap);
         req.setProjectedProjectOtCost(projectedCost);
-        req.setIsBudgetOverrun(!isNightDuty && projectedCost > cap);
-        req.setStatus("PENDING_MANAGER");
+        req.setIsBudgetOverrun(projectedCost > cap);
+        req.setStatus("PENDING_DIRECTOR");
         req.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-
-        boolean isSelfEmployeeOnCreate = caller != null
-                && ((caller.getId() != null && caller.getId().equals(req.getEmployeeId()))
-                    || (caller.getEmployeeCode() != null && caller.getEmployeeCode().equalsIgnoreCase(req.getEmployeeCode())));
-        if (Boolean.TRUE.equals(req.getAutoApprove()) && !isSelfEmployeeOnCreate) {
-            finalizeApprovedOvertime(
-                    req,
-                    caller != null ? caller.getId() : null,
-                    caller != null ? caller.getFullName() : "Trưởng phòng / CHT",
-                    callerShortRole,
-                    null,
-                    req.getFaceIdNote()
-            );
-        }
 
         try {
             OvertimeRequest entity = OvertimeRequest.builder()
@@ -1000,19 +868,17 @@ public class WorkflowRequestController {
                     .otHours(BigDecimal.valueOf(otHours))
                     .otType(resolvedOtType)
                     .multiplier(BigDecimal.valueOf(canonicalMultiplier))
-                    .isNightDuty(isNightDuty)
-                    .nightDutyConvertedDays(BigDecimal.valueOf(req.getNightDutyConvertedDays()))
-                    .reason(req.getReason() != null ? req.getReason() : (isNightDuty ? "Trực đêm công trường (22h00 - 05h00)" : "Tăng ca thi công / nghiệp vụ"))
-                    .directorApproval("NOT_REQUIRED")
+                    .reason(req.getReason() != null ? req.getReason() : "Tăng ca thi công / nghiệp vụ")
+                    .directorApproval("PENDING")
                     .siteManagerApproval(req.getSiteManagerApproval())
-                    .hrApproval(req.getHrApproval())
-                    .payableOtHours(BigDecimal.valueOf(req.getPayableOtHours()))
+                    .hrApproval("PENDING")
+                    .payableOtHours(BigDecimal.valueOf(otHours))
                     .faceIdReconcileStatus(req.getFaceIdReconcileStatus())
-                    .estimatedCost(BigDecimal.valueOf(req.getEstimatedCost()))
+                    .estimatedCost(BigDecimal.valueOf(estCost))
                     .budgetCapAtCreation(BigDecimal.valueOf(cap))
                     .projectedProjectOtCost(BigDecimal.valueOf(projectedCost))
                     .isBudgetOverrun(req.getIsBudgetOverrun())
-                    .status(req.getStatus())
+                    .status("PENDING_DIRECTOR")
                     .build();
             OvertimeRequest saved = overtimeRequestRepository.save(entity);
             req.setId(saved.getId());
@@ -1023,7 +889,7 @@ public class WorkflowRequestController {
         return ResponseEntity.ok(req);
     }
 
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('HR_MANAGER', 'CHIEF_ACCOUNTANT', 'SITE_MANAGER')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('DIRECTOR', 'CEO', 'HR_MANAGER', 'HR_STAFF', 'HR_OFFICER', 'CHIEF_ACCOUNTANT', 'ACCOUNTANT', 'PAYROLL_ACCOUNTANT')")
     @PutMapping("/requests/overtime/{id}/approve")
     public ResponseEntity<OvertimeDto> approveOvertime(
             @PathVariable Long id,
@@ -1039,60 +905,104 @@ public class WorkflowRequestController {
         Employee caller = resolveCurrentEmployeeCaller(principal);
         Long callerId = caller != null ? caller.getId() : null;
         String callerCode = caller != null ? caller.getEmployeeCode() : null;
-        String callerName = caller != null ? caller.getFullName() : "Trưởng phòng phê duyệt";
+        String callerName = caller != null ? caller.getFullName() : "Cán bộ phê duyệt";
         String callerRole = resolveCallerShortRole(principal, body.getRole());
 
-        if (!Set.of("HR_MANAGER", "CHIEF_ACCOUNTANT", "SITE_MANAGER").contains(callerRole)) {
-            throw new BusinessException("Chỉ Trưởng phòng hoặc Quản lý trực tiếp mới có quyền duyệt đơn OT (Ban Giám đốc không duyệt đơn OT lẻ)!");
-        }
+        boolean isDirectorCaller = Set.of("DIRECTOR", "CEO").contains(callerRole);
+        boolean isReconcilerCaller = Set.of("HR_MANAGER", "HR_STAFF", "HR_OFFICER", "CHIEF_ACCOUNTANT", "ACCOUNTANT", "PAYROLL_ACCOUNTANT")
+                .contains(callerRole);
 
-        boolean isOfficeReq = (req.getProjectId() == null || req.getProjectId() == 0L)
-                || isOfficeStaffEmployee(req.getEmployeeId(), req.getEmployeeCode(), req.getProjectId());
-
-        if ("SITE_MANAGER".equals(callerRole) && isOfficeReq) {
-            throw new BusinessException("Từ chối phân quyền: Chỉ huy trưởng công trường chỉ được duyệt đơn OT / Trực đêm thuộc công trường!");
-        }
-        if (("HR_MANAGER".equals(callerRole) || "CHIEF_ACCOUNTANT".equals(callerRole)) && !isOfficeReq) {
-            throw new BusinessException("Từ chối phân quyền: Trưởng phòng khối Văn phòng chỉ được duyệt đơn OT khối Văn phòng HQ!");
-        }
-
-        // Chặn tuyệt đối tự duyệt đơn OT cá nhân của chính mình (nhưng cho phép Trưởng phòng duyệt trực tiếp đơn của nhân viên mình lập)
+        // Chặn tuyệt đối tự duyệt / tự đối soát (SoD: Không thể tự phê duyệt đơn của chính mình hoặc đơn do chính mình lập)
         boolean isSelfEmployee = (callerId != null && callerId.equals(req.getEmployeeId()))
                 || (callerCode != null && callerCode.equalsIgnoreCase(req.getEmployeeCode()));
-        if (isSelfEmployee) {
-            throw new BusinessException("Khóa Phân Quyền (SoD): Không thể tự phê duyệt đơn OT của chính bản thân mình!");
+        boolean isSelfCreator = (callerId != null && callerId.equals(req.getCreatedById()));
+        if (isSelfEmployee || isSelfCreator) {
+            throw new BusinessException("Khóa Phân Quyền (SoD): Nghiêm cấm tự duyệt / tự hậu kiểm đơn OT của chính bản thân hoặc đơn do chính mình lập!");
         }
 
-        if (!body.isApproved()) {
-            if (body.getRejectionReason() == null || body.getRejectionReason().isBlank()) {
-                throw new BusinessException("Vui lòng nhập lý do từ chối đơn OT!");
+        String currentStatus = req.getStatus() != null ? req.getStatus().toUpperCase(Locale.ROOT) : "PENDING_DIRECTOR";
+        boolean inDirectorStage = "PENDING_DIRECTOR".equals(currentStatus) || "PENDING_SM".equals(currentStatus);
+
+        if (inDirectorStage) {
+            if (!isDirectorCaller) {
+                throw new BusinessException("Sai quy trình Phương án B: Đơn OT đang ở Bước 1 (Chờ Ban Giám Đốc duyệt chủ trương trước khi thực hiện)!");
             }
-            req.setDirectorApproval("NOT_REQUIRED");
-            if (isOfficeReq) {
-                req.setHrApproval("REJECTED");
+            if (!body.isApproved()) {
+                if (body.getRejectionReason() == null || body.getRejectionReason().isBlank()) {
+                    throw new BusinessException("Vui lòng nhập lý do từ chối chủ trương OT!");
+                }
+                req.setDirectorApproval("REJECTED");
+                req.setStatus("REJECTED");
+                req.setRejectionReason(body.getRejectionReason().trim());
             } else {
-                req.setSiteManagerApproval("REJECTED");
+                if (Boolean.TRUE.equals(req.getIsBudgetOverrun()) && !Boolean.TRUE.equals(body.getBudgetOverrideApproved())) {
+                    throw new BusinessException("Dự toán chi phí OT vượt trần ngân sách dự án! Ban Giám đốc cần xác nhận cho phép vượt trần ngân sách khi duyệt chủ trương.");
+                }
+                req.setDirectorApproval("APPROVED");
+                req.setDirectorApprovedAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+                req.setBudgetOverrideApproved(Boolean.TRUE.equals(body.getBudgetOverrideApproved()));
+                req.setStatus("PENDING_RECONCILIATION");
             }
-            req.setStatus("REJECTED");
-            req.setReconciledById(callerId);
-            req.setReconciledByName(callerName);
-            req.setReconciledByRole(callerRole);
-            req.setReconciledAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-            req.setRejectionReason(body.getRejectionReason().trim());
         } else {
-            boolean isNightDuty = "SITE_NIGHT_DUTY".equalsIgnoreCase(req.getOtType()) || Boolean.TRUE.equals(req.getIsNightDuty());
-            if (!isNightDuty && Boolean.TRUE.equals(req.getIsBudgetOverrun()) && !Boolean.TRUE.equals(body.getBudgetOverrideApproved())) {
-                throw new BusinessException("Dự toán chi phí OT vượt trần ngân sách dự án! Trưởng phòng cần xác nhận cho phép vượt trần ngân sách (budgetOverrideApproved=true) khi duyệt đơn.");
+            // Bước 2: Hậu kiểm Face ID & Tài chính (PENDING_RECONCILIATION / PENDING_HR)
+            if (!isReconcilerCaller) {
+                throw new BusinessException("Sai quy trình Phương án B: Bước 2 (Hậu kiểm Face ID & Tài chính) thuộc thẩm quyền Nhân sự / Kế toán!");
             }
-            if (isNightDuty && req.getWorkDate() != null && req.getWorkDate().length() >= 7) {
-                String ym = req.getWorkDate().substring(0, 7);
-                long existingNightCount = countMonthlyNightDutySessions(req.getEmployeeId(), req.getEmployeeCode(), ym, id);
-                if (existingNightCount >= LaborLawConstants.MAX_SITE_NIGHT_DUTY_PER_MONTH) {
-                    throw new BusinessException("Vượt giới hạn Trực đêm công trường (tối đa 10 buổi/tháng): Đã có " + existingNightCount + "/10 buổi trong tháng " + ym + "!");
+            if (!"APPROVED".equalsIgnoreCase(req.getDirectorApproval()) && !"PENDING_HR".equals(currentStatus)) {
+                throw new BusinessException("Đơn OT phải được Ban Giám Đốc duyệt chủ trương (Bước 1) trước khi hậu kiểm thanh toán!");
+            }
+
+            if (!body.isApproved()) {
+                if (body.getRejectionReason() == null || body.getRejectionReason().isBlank()) {
+                    throw new BusinessException("Vui lòng nhập lý do từ chối khi hậu kiểm Face ID / tài chính!");
+                }
+                req.setHrApproval("REJECTED");
+                req.setStatus("REJECTED");
+                req.setReconciledById(callerId);
+                req.setReconciledByName(callerName);
+                req.setReconciledByRole(callerRole);
+                req.setReconciledAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+                req.setRejectionReason(body.getRejectionReason().trim());
+            } else {
+                // Đối chiếu số giờ Face ID -> Pay tối đa min(otHours, actualFaceIdHours nếu có)
+                double reqHours = req.getOtHours() != null ? req.getOtHours() : 0.0;
+                double payableHours = body.getPayableOtHours() != null
+                        ? Math.max(0.0, Math.min(reqHours, body.getPayableOtHours()))
+                        : (req.getActualFaceIdHours() != null ? Math.min(reqHours, req.getActualFaceIdHours()) : reqHours);
+
+                boolean isOfficeReq = (req.getProjectId() == null || req.getProjectId() == 0L);
+                double mult = req.getMultiplier() != null ? req.getMultiplier() : 1.5;
+                double finalCost = resolveEmployeeOtCost(req.getEmployeeId(), req.getEmployeeCode(), isOfficeReq, payableHours, mult);
+
+                req.setPayableOtHours(payableHours);
+                req.setEstimatedCost(finalCost);
+                if (body.getFaceIdNote() != null && !body.getFaceIdNote().isBlank()) {
+                    req.setFaceIdNote(body.getFaceIdNote().trim());
+                }
+                req.setHrApproval("APPROVED");
+                req.setReconciledById(callerId);
+                req.setReconciledByName(callerName);
+                req.setReconciledByRole(callerRole);
+                req.setReconciledAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+                req.setStatus("APPROVED");
+
+                // Cộng giờ OT đã hậu kiểm vào MonthlyTimesheet để tính lương
+                try {
+                    LocalDate d = LocalDate.parse(req.getWorkDate());
+                    MonthlyTimesheet ts = timesheetRepository.findByEmployeeIdAndMonthAndYear(
+                            req.getEmployeeId(), d.getMonthValue(), d.getYear()).orElse(null);
+                    if (ts != null && payableHours > 0) {
+                        BigDecimal hours = BigDecimal.valueOf(payableHours);
+                        if ("NIGHT_SHIFT_ADDITIONAL".equalsIgnoreCase(req.getOtType())) {
+                            ts.setNightHours(ts.getNightHours().add(hours));
+                        } else {
+                            ts.setOvertimeHours(ts.getOvertimeHours().add(hours));
+                        }
+                        timesheetRepository.save(ts);
+                    }
+                } catch (Exception ignored) {
                 }
             }
-            req.setBudgetOverrideApproved(Boolean.TRUE.equals(body.getBudgetOverrideApproved()));
-            finalizeApprovedOvertime(req, callerId, callerName, callerRole, body.getPayableOtHours(), body.getFaceIdNote());
         }
 
         try {
@@ -1110,8 +1020,6 @@ public class WorkflowRequestController {
                         .otHours(BigDecimal.valueOf(req.getOtHours() != null ? req.getOtHours() : 0.0))
                         .otType(req.getOtType() != null ? req.getOtType() : "WEEKDAY_150")
                         .multiplier(BigDecimal.valueOf(req.getMultiplier() != null ? req.getMultiplier() : 1.5))
-                        .isNightDuty(Boolean.TRUE.equals(req.getIsNightDuty()))
-                        .nightDutyConvertedDays(BigDecimal.valueOf(req.getNightDutyConvertedDays() != null ? req.getNightDutyConvertedDays() : 0.0))
                         .reason(req.getReason() != null ? req.getReason() : "")
                         .build();
             }
@@ -1123,8 +1031,6 @@ public class WorkflowRequestController {
                 entity.setReconciledById(req.getReconciledById());
                 entity.setReconciledByName(req.getReconciledByName());
                 entity.setReconciledByRole(req.getReconciledByRole());
-                entity.setIsNightDuty(Boolean.TRUE.equals(req.getIsNightDuty()));
-                entity.setNightDutyConvertedDays(BigDecimal.valueOf(req.getNightDutyConvertedDays() != null ? req.getNightDutyConvertedDays() : 0.0));
                 if (req.getActualFaceIdHours() != null) entity.setActualFaceIdHours(BigDecimal.valueOf(req.getActualFaceIdHours()));
                 if (req.getPayableOtHours() != null) entity.setPayableOtHours(BigDecimal.valueOf(req.getPayableOtHours()));
                 entity.setFaceIdReconcileStatus(req.getFaceIdReconcileStatus());
@@ -1135,16 +1041,13 @@ public class WorkflowRequestController {
                 overtimeRequestRepository.save(entity);
             }
             auditLogRepository.save(AuditLog.builder()
-                    .action("APPROVE_OVERTIME_DIRECT")
+                    .action(inDirectorStage ? "APPROVE_OVERTIME_POLICY" : "RECONCILE_OVERTIME_FACEID")
                     .entityName("overtime_requests")
                     .entityId(id)
                     .performedByName(callerName)
                     .performedByRole(callerRole)
-                    .description("Trưởng phòng / CHT duyệt trực tiếp đơn OT #" + id
-                            + (Boolean.TRUE.equals(req.getIsNightDuty())
-                                    ? " [Trực đêm công trường = 1.5 ngày công]"
-                                    : " - Giờ tính lương: " + req.getPayableOtHours() + "h")
-                            + " - Trạng thái: " + req.getStatus())
+                    .description((inDirectorStage ? "Duyệt chủ trương OT #" : "Hậu kiểm Face ID & tài chính OT #")
+                            + id + " - Giờ tính lương: " + req.getPayableOtHours() + "h - Trạng thái: " + req.getStatus())
                     .build());
         } catch (Exception ignored) {
         }
@@ -1158,14 +1061,11 @@ public class WorkflowRequestController {
             emailService.sendWorkflowDecisionEmail(
                     targetEmail,
                     req.getEmployeeName(),
-                    Boolean.TRUE.equals(req.getIsNightDuty()) ? "Đơn Trực Đêm Công Trường" : "Đơn Làm Thêm Giờ (OT)",
+                    "Đơn Làm Thêm Giờ (OT)",
                     id,
                     isApproved,
-                    "Ngày " + req.getWorkDate() + " (" + req.getStartTime() + " - " + req.getEndTime()
-                            + (Boolean.TRUE.equals(req.getIsNightDuty())
-                                    ? ", Quy đổi: 1,5 ngày công)"
-                                    : ", ĐK: " + req.getOtHours() + "h, Tính lương: " + req.getPayableOtHours() + "h, hệ số " + req.getMultiplier() + "x)"),
-                    isApproved ? "Trưởng phòng đã phê duyệt trực tiếp và đồng bộ vào Bảng công & Bảng lương." : "Lý do từ chối: " + req.getRejectionReason()
+                    "Ngày " + req.getWorkDate() + " (" + req.getStartTime() + " - " + req.getEndTime() + ", ĐK: " + req.getOtHours() + "h, Tính lương: " + req.getPayableOtHours() + "h, hệ số " + req.getMultiplier() + "x)",
+                    isApproved ? "Đã hậu kiểm Face ID và hạch toán vào Bảng công & Bảng lương kỳ quyết toán." : "Lý do từ chối: " + req.getRejectionReason()
             );
         }
         return ResponseEntity.ok(req);
@@ -1184,8 +1084,7 @@ public class WorkflowRequestController {
         private Long employeeId;
         private String employeeCode;
         private String employeeName;
-        private String leaveType; // ANNUAL, SPECIAL_PAID, SICK_SHORT, SICK_LONG, SICK, PERSONAL_TRAVEL, COMPENSATORY, BAD_WEATHER, UNPAID
-        private String halfDaySession; // FULL_DAY, MORNING, AFTERNOON
+        private String leaveType; // ANNUAL, COMPENSATORY, SICK, SPECIAL_PAID, BAD_WEATHER, UNPAID
         private String startDate;
         private String endDate;
         private Double daysCount;
@@ -1231,51 +1130,6 @@ public class WorkflowRequestController {
         return ALLOWED_LEAVE_EXTENSIONS.stream().anyMatch(lower::endsWith);
     }
 
-    private boolean isShortSickLeaveType(String leaveType) {
-        return "SICK_SHORT".equalsIgnoreCase(leaveType) || "SICK".equalsIgnoreCase(leaveType);
-    }
-
-    private boolean isUnpaidLeaveType(String leaveType) {
-        return "UNPAID".equalsIgnoreCase(leaveType)
-                || "PERSONAL_TRAVEL".equalsIgnoreCase(leaveType)
-                || "SICK_LONG".equalsIgnoreCase(leaveType);
-    }
-
-    private boolean isMonthlyCappedPaidLeaveType(String leaveType) {
-        return "ANNUAL".equalsIgnoreCase(leaveType)
-                || "SPECIAL_PAID".equalsIgnoreCase(leaveType)
-                || isShortSickLeaveType(leaveType);
-    }
-
-    private double countMonthlyLeaveDays(
-            Long empId,
-            String empCode,
-            int year,
-            int month,
-            Long excludeId,
-            boolean approvedOnly,
-            boolean sickOnly
-    ) {
-        return leaveMap.values().stream()
-                .filter(l -> excludeId == null || !excludeId.equals(l.getId()))
-                .filter(l -> approvedOnly
-                        ? "APPROVED".equalsIgnoreCase(l.getStatus())
-                        : !"REJECTED".equalsIgnoreCase(l.getStatus()))
-                .filter(l -> (empId != null && empId.equals(l.getEmployeeId()))
-                        || (empCode != null && empCode.equalsIgnoreCase(l.getEmployeeCode())))
-                .filter(l -> sickOnly ? isShortSickLeaveType(l.getLeaveType()) : isMonthlyCappedPaidLeaveType(l.getLeaveType()))
-                .filter(l -> {
-                    try {
-                        LocalDate s = LocalDate.parse(l.getStartDate());
-                        return s.getYear() == year && s.getMonthValue() == month;
-                    } catch (Exception ex) {
-                        return false;
-                    }
-                })
-                .mapToDouble(l -> l.getDaysCount() != null ? l.getDaysCount() : 0.0)
-                .sum();
-    }
-
     @PostMapping("/requests/leave")
     public ResponseEntity<LeaveDto> createLeaveRequest(@RequestBody LeaveDto req) {
         if (req.getReason() == null || req.getReason().isBlank()) {
@@ -1305,36 +1159,19 @@ public class WorkflowRequestController {
         req.setStartDate(parsedStart.toString());
         req.setEndDate(parsedEnd.toString());
 
-        String normalizedSession = (req.getHalfDaySession() != null && !req.getHalfDaySession().isBlank())
-                ? req.getHalfDaySession().trim().toUpperCase()
-                : "FULL_DAY";
-        if (!Set.of("FULL_DAY", "MORNING", "AFTERNOON").contains(normalizedSession)) {
-            throw new BusinessException("Ca nghỉ không hợp lệ! Vui lòng chọn Cả ngày (FULL_DAY), Buổi sáng (MORNING) hoặc Buổi chiều (AFTERNOON).");
-        }
-        req.setHalfDaySession(normalizedSession);
-
-        double requestedDays;
-        if ("MORNING".equals(normalizedSession) || "AFTERNOON".equals(normalizedSession)) {
-            if (!parsedStart.equals(parsedEnd)) {
-                throw new BusinessException("Nghỉ nửa ngày (Sáng hoặc Chiều - 0,5 ngày công) chỉ áp dụng khi Từ ngày trùng Đến ngày!");
-            }
-            requestedDays = 0.5;
-        } else {
-            requestedDays = req.getDaysCount() != null ? req.getDaysCount() : 1.0;
-        }
+        double requestedDays = req.getDaysCount() != null ? req.getDaysCount() : 1.0;
         if (requestedDays <= 0) {
             throw new BusinessException("Số ngày xin nghỉ tính công phải lớn hơn 0!");
         }
-        req.setDaysCount(requestedDays);
 
         String normalizedLeaveType = (req.getLeaveType() != null && !req.getLeaveType().isBlank())
                 ? req.getLeaveType().trim().toUpperCase()
                 : "ANNUAL";
         req.setLeaveType(normalizedLeaveType);
 
-        if ("SPECIAL_PAID".equals(normalizedLeaveType) && requestedDays > 4.0) {
+        if ("SPECIAL_PAID".equals(normalizedLeaveType) && requestedDays > 3.0) {
             throw new BusinessException(
-                    "Vượt hạn mức nghỉ việc khẩn cấp / gia đình hưởng lương trong tháng (tối đa 04 ngày/tháng). Vui lòng tách phần ngày dư sang Nghỉ không lương!");
+                    "Vượt hạn mức Khoản 1 Điều 115 BLLĐ 2019: Nghỉ việc riêng hưởng lương tối đa 03 ngày/sự kiện! Vui lòng tách phần ngày dư sang Phép Năm hoặc Nghỉ Không Lương.");
         }
 
         Employee matchedEmp = null;
@@ -1352,7 +1189,7 @@ public class WorkflowRequestController {
         final Long targetEmpId = req.getEmployeeId();
         final String targetEmpCode = req.getEmployeeCode();
 
-        // Kiểm tra trùng lịch với các đơn chưa bị từ chối (cho phép 1 buổi sáng + 1 buổi chiều khác buổi trong cùng 1 ngày)
+        // Kiểm tra trùng lịch với các đơn chưa bị từ chối
         boolean hasOverlap = leaveMap.values().stream()
                 .filter(l -> !"REJECTED".equalsIgnoreCase(l.getStatus()))
                 .filter(l -> (targetEmpId != null && targetEmpId.equals(l.getEmployeeId()))
@@ -1361,14 +1198,7 @@ public class WorkflowRequestController {
                     try {
                         LocalDate s = LocalDate.parse(l.getStartDate());
                         LocalDate e = LocalDate.parse(l.getEndDate());
-                        boolean datesOverlap = !s.isAfter(parsedEnd) && !e.isBefore(parsedStart);
-                        if (!datesOverlap) return false;
-                        String existingSession = l.getHalfDaySession() != null ? l.getHalfDaySession().toUpperCase() : "FULL_DAY";
-                        if (("MORNING".equals(normalizedSession) && "AFTERNOON".equals(existingSession))
-                                || ("AFTERNOON".equals(normalizedSession) && "MORNING".equals(existingSession))) {
-                            return false;
-                        }
-                        return true;
+                        return !s.isAfter(parsedEnd) && !e.isBefore(parsedStart);
                     } catch (Exception ex) {
                         return false;
                     }
@@ -1378,18 +1208,7 @@ public class WorkflowRequestController {
                     "Trùng lịch nghỉ phép: Khoảng ngày " + parsedStart + " -> " + parsedEnd + " trùng với đơn đã tồn tại!");
         }
 
-        // Nghỉ ốm ngắn ngày (SICK_SHORT / SICK): Công ty tự chi trả, tối đa 2.0 ngày/tháng
-        if (isShortSickLeaveType(normalizedLeaveType)) {
-            double usedSickInMonth = countMonthlyLeaveDays(
-                    targetEmpId, targetEmpCode, parsedStart.getYear(), parsedStart.getMonthValue(), null, false, true);
-            if (usedSickInMonth + requestedDays > LaborLawConstants.MAX_SHORT_SICK_DAYS_PER_MONTH.doubleValue() + 1e-6) {
-                throw new BusinessException(
-                        "Vượt hạn mức Nghỉ ốm ngắn ngày (tối đa 02 ngày/tháng do Công ty tự chi trả, không trừ lương). "
-                                + "Nếu nằm viện / điều trị dài ngày (> 2 ngày/tháng), vui lòng chọn chế độ Nghỉ ốm dài ngày (SICK_LONG - Không tính lương)!");
-            }
-        }
-
-        // Kiểm tra & trừ quỹ phép năm cho ANNUAL (Nghỉ phép năm)
+        // Chỉ chế độ ANNUAL (Nghỉ phép năm — Điều 113 & 114 BLLĐ) mới kiểm tra & trừ quỹ phép năm
         if ("ANNUAL".equals(normalizedLeaveType)) {
             int seniorityBonus = 0;
             if (matchedEmp != null && matchedEmp.getHireDate() != null) {
@@ -1426,7 +1245,6 @@ public class WorkflowRequestController {
             LeaveRequest entity = LeaveRequest.builder()
                     .employeeId(req.getEmployeeId() != null ? req.getEmployeeId() : 1L)
                     .leaveType(normalizedLeaveType)
-                    .halfDaySession(normalizedSession)
                     .startDate(parsedStart)
                     .endDate(parsedEnd)
                     .daysCount(BigDecimal.valueOf(requestedDays))
@@ -1539,23 +1357,11 @@ public class WorkflowRequestController {
                     if (ts != null) {
                         BigDecimal days = BigDecimal.valueOf(req.getDaysCount() != null ? req.getDaysCount() : 1.0);
                         String normalizedType = req.getLeaveType() != null ? req.getLeaveType().trim().toUpperCase() : "ANNUAL";
-                        if (isUnpaidLeaveType(normalizedType)) {
-                            // PERSONAL_TRAVEL (du lịch/việc cá nhân), SICK_LONG (nằm viện dài ngày), UNPAID: Không tính công hưởng lương
+                        if ("UNPAID".equals(normalizedType)) {
                             ts.setUnpaidLeaveDays(ts.getUnpaidLeaveDays().add(days));
-                        } else if (isMonthlyCappedPaidLeaveType(normalizedType)) {
-                            // Trần tối đa 4.0 ngày nghỉ hưởng lương/tháng (2 ngày phép + 2 ngày dự phòng, gộp ốm ngắn ngày <= 2 ngày)
-                            double alreadyApprovedPaid = countMonthlyLeaveDays(
-                                    req.getEmployeeId(), req.getEmployeeCode(), d.getYear(), d.getMonthValue(), req.getId(), true, false);
-                            double remainingPaidRoom = Math.max(0.0, LaborLawConstants.MAX_PAID_LEAVE_DAYS_PER_MONTH.doubleValue() - alreadyApprovedPaid);
-                            double paidPart = Math.min(days.doubleValue(), remainingPaidRoom);
-                            double unpaidPart = Math.max(0.0, days.doubleValue() - paidPart);
-                            if (paidPart > 0) {
-                                ts.setPaidLeaveDays(ts.getPaidLeaveDays().add(BigDecimal.valueOf(paidPart)));
-                            }
-                            if (unpaidPart > 0) {
-                                ts.setUnpaidLeaveDays(ts.getUnpaidLeaveDays().add(BigDecimal.valueOf(unpaidPart)));
-                            }
-                        } else {
+                        } else if (!"SICK".equals(normalizedType)) {
+                            // ANNUAL (P), COMPENSATORY (CT), SPECIAL_PAID (CĐ - Đ.115 K.1), BAD_WEATHER (CĐ - Đ.99 K.3)
+                            // đều là ngày công hưởng lương từ DN; riêng SICK (Ro) do Quỹ BHXH chi trả nên không cộng paidLeaveDays.
                             ts.setPaidLeaveDays(ts.getPaidLeaveDays().add(days));
                         }
                         timesheetRepository.save(ts);
