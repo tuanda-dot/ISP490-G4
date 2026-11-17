@@ -62,6 +62,7 @@ public class IntegrationController {
     /**
      * Sinh mã VietQR chi lương chuẩn NAPAS 247
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ACCOUNTANT', 'PAYROLL_ACCOUNTANT', 'CHIEF_ACCOUNTANT', 'DIRECTOR', 'CEO')")
     @PostMapping("/vietqr/generate")
     public ResponseEntity<VietQrPaymentInfo> generateVietQr(@RequestBody GenerateVietQrRequest request) {
         VietQrPaymentInfo qrInfo = vietQrService.generatePayrollVietQr(
@@ -100,6 +101,7 @@ public class IntegrationController {
     /**
      * Xuất tệp lệnh chi lương hàng loạt cho Ngân hàng (Vietcombank hoặc BIDV) - UC-269
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ACCOUNTANT', 'PAYROLL_ACCOUNTANT', 'CHIEF_ACCOUNTANT', 'DIRECTOR', 'CEO')")
     @GetMapping("/payroll/{payrollId}/export-bank")
     public ResponseEntity<byte[]> exportBankBatch(
             @PathVariable Long payrollId,
