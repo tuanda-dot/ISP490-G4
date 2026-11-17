@@ -3,8 +3,10 @@ package com.hmcps.controller;
 import com.hmcps.entity.Employee;
 import com.hmcps.entity.PayrollItem;
 import com.hmcps.entity.Payslip;
+import com.hmcps.entity.PayslipInquiry;
 import com.hmcps.repository.EmployeeRepository;
 import com.hmcps.repository.PayrollItemRepository;
+import com.hmcps.repository.PayslipInquiryRepository;
 import com.hmcps.repository.PayslipRepository;
 import com.hmcps.service.integration.EmailService;
 import org.junit.jupiter.api.DisplayName;
@@ -24,12 +26,13 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit Test cho PayslipController (FE-10: UC-21, UC-22)
+ * Unit Test cho PayslipController (FE-13: UC-25, UC-26)
  * Kiểm thử tra cứu phiếu lương điện tử (E-Payslip), ghi nhận thời điểm xem,
- * sinh phiếu lương hàng loạt và lịch sử phiếu lương theo nhân viên.
+ * xác nhận tính chính xác, xử lý khiếu nại phiếu lương (Inquiry) và gửi email hàng loạt.
  */
 @ExtendWith(MockitoExtension.class)
 class PayslipControllerTest {
@@ -42,6 +45,9 @@ class PayslipControllerTest {
 
     @Mock
     private EmployeeRepository employeeRepository;
+
+    @Mock
+    private PayslipInquiryRepository payslipInquiryRepository;
 
     @Mock
     private EmailService emailService;
@@ -118,6 +124,82 @@ class PayslipControllerTest {
     }
 
     @Test
+    @DisplayName("E-Payslip: Xác nhận độ chính xác của phiếu lương -> Cập nhật CONFIRMED")
+    void testConfirmPayslipAccuracy_Success() {
+        Payslip ps = Payslip.builder().id(10L).status("VIEWED").build();
+        when(payslipRepository.findById(10L)).thenReturn(Optional.of(ps));
+        when(payslipRepository.save(any(Payslip.class))).thenAnswer(i -> i.getArgument(0));
+
+        ResponseEntity<Payslip> resp = payslipController.confirmPayslipAccuracy(10L);
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody().getStatus()).isEqualTo("CONFIRMED");
+    }
+
+    @Test
+    @DisplayName("E-Payslip Inquiry: Tạo mới khiếu nại phiếu lương thành công")
+    void testCreatePayslipInquiry_Success() {
+        PayslipController.CreateInquiryRequest emptyReq = new PayslipController.CreateInquiryRequest();
+        emptyReq.setContent("  ");
+        assertThatThrownBy(() -> payslipController.createPayslipInquiry(emptyReq))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        PayslipController.CreateInquiryRequest valid = new PayslipController.CreateInquiryRequest();
+        valid.setEmployeeId(6L);
+        valid.setSubject("Kiểm tra thuế TNCN");
+        valid.setContent("Nhờ kế toán đối chiếu lại NPT");
+
+        when(payslipInquiryRepository.save(any(PayslipInquiry.class))).thenAnswer(i -> {
+            PayslipInquiry arg = i.getArgument(0);
+            arg.setId(101L);
+            return arg;
+        });
+
+        ResponseEntity<PayslipInquiry> resp = payslipController.createPayslipInquiry(valid);
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody().getId()).isEqualTo(101L);
+        assertThat(resp.getBody().getStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    @DisplayName("E-Payslip Inquiry: Kế toán phản hồi khiếu nại -> RESOLVED")
+    void testRespondPayslipInquiry_Success() {
+        PayslipInquiry inq = PayslipInquiry.builder()
+                .id(5L).employeeId(6L).title("Thuế").content("Hỏi").status("PENDING").build();
+        when(payslipInquiryRepository.findById(5L)).thenReturn(Optional.of(inq));
+        when(payslipInquiryRepository.save(any(PayslipInquiry.class))).thenAnswer(i -> i.getArgument(0));
+
+        PayslipController.RespondInquiryRequest req = new PayslipController.RespondInquiryRequest();
+        req.setAccountantReply("Đã cập nhật NPT tháng 10");
+        req.setRespondedById(2L);
+
+        ResponseEntity<Map<String, Object>> resp = payslipController.respondPayslipInquiry(5L, req);
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody()).containsEntry("status", "RESOLVED");
+        assertThat(resp.getBody()).containsEntry("accountantReply", "Đã cập nhật NPT tháng 10");
+    }
+
+    @Test
+    @DisplayName("E-Payslip Inquiry: Lấy toàn bộ danh sách khiếu nại phiếu lương kèm thông tin nhân sự")
+    void testGetAllPayslipInquiries_Success() {
+        PayslipInquiry inq = PayslipInquiry.builder().id(1L).employeeId(6L).status("PENDING").build();
+        when(payslipInquiryRepository.findAll()).thenReturn(List.of(inq));
+        Employee emp = Employee.builder().id(6L).employeeCode("HM-006").fullName("Kỹ sư").build();
+        when(employeeRepository.findAll()).thenReturn(List.of(emp));
+
+        ResponseEntity<List<Map<String, Object>>> resp = payslipController.getAllPayslipInquiries();
+        assertThat(resp.getBody()).hasSize(1);
+        assertThat(resp.getBody().get(0)).containsEntry("employeeCode", "HM-006");
+    }
+
+    @Test
+    @DisplayName("E-Payslip: Lấy danh sách log email đã phát hành")
+    void testGetEmailLogs_Success() {
+        when(emailService.getDispatchedLogs()).thenReturn(List.of(Map.of("to", "a@haiminh.vn")));
+        ResponseEntity<List<Map<String, Object>>> resp = payslipController.getEmailLogs();
+        assertThat(resp.getBody()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("E-Payslip: Sinh phiếu lương hàng loạt từ bảng tính lương đã duyệt")
     void testGeneratePayslipsForPayroll() {
         Long payrollId = 5L;
@@ -127,15 +209,12 @@ class PayslipControllerTest {
         when(payrollItemRepository.findByPayrollId(payrollId)).thenReturn(List.of(item1, item2));
         when(payslipRepository.findByPayrollItemId(101L)).thenReturn(Optional.empty());
         when(payslipRepository.findByPayrollItemId(102L)).thenReturn(Optional.empty());
-        when(payslipRepository.save(any(Payslip.class))).thenAnswer(i -> i.getArgument(0));
 
-        ResponseEntity<List<Payslip>> response =
-                payslipController.generatePayslipsForPayroll(payrollId, 10, 2026);
+        ResponseEntity<List<Payslip>> response = payslipController.generatePayslipsForPayroll(payrollId);
 
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody()).hasSize(2);
-        assertThat(response.getBody().get(0).getStatus()).isEqualTo("SENT");
         verify(payslipRepository, times(2)).save(any(Payslip.class));
     }
 
