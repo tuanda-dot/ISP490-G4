@@ -679,14 +679,31 @@ public class PayslipController {
                     <tr><td style="padding: 7px 8px; border: 1px solid #e2e8f0;">Thuế Thu nhập cá nhân (TNCN)</td><td style="text-align: right; padding: 7px 8px; border: 1px solid #e2e8f0; color: #b91c1c;">-%s đ</td></tr>
                     <tr style="background: #ecfdf5;"><td style="padding: 9px 8px; border: 1px solid #a7f3d0;"><strong>THỰC LĨNH CHUYỂN KHOẢN (NET)</strong></td><td style="text-align: right; padding: 9px 8px; border: 1px solid #a7f3d0; color: #047857;"><strong>%s đ</strong></td></tr>
                 </table>
-                <p style="margin-top: 16px; color: #64748b; font-size: 12px;">Bảo mật theo Điều 95 Bộ luật Lao động 2019. Mọi thắc mắc vui lòng phản hồi trực tiếp trên cổng HMCPS E-Payslip.</p>
+                <table style="width: 100%%; border-collapse: collapse; margin-top: 18px; font-size: 13px; text-align: center;">
+                    <tr>
+                        <td style="width: 50%%; vertical-align: top; padding: 8px;">
+                            <div style="font-weight: bold; text-transform: uppercase;">Người lập phiếu</div>
+                            <div style="font-size: 11px; color: #64748b; font-style: italic;">(Kế toán - Ký, ghi rõ họ tên)</div>
+                            <div style="margin: 14px 0; color: #059669; font-weight: bold;">&#10003; Đã lập phiếu</div>
+                            <div style="font-weight: bold;">Hoàng Thị Lan</div>
+                        </td>
+                        <td style="width: 50%%; vertical-align: top; padding: 8px;">
+                            <div style="font-weight: bold; text-transform: uppercase;">Người nhận lương</div>
+                            <div style="font-size: 11px; color: #64748b; font-style: italic;">(Nhân viên - Ký xác nhận)</div>
+                            <div style="margin: 14px 0; color: #059669; font-weight: bold;">&#10003; Đã nhận E-Payslip</div>
+                            <div style="font-weight: bold;">%s</div>
+                        </td>
+                    </tr>
+                </table>
+                <p style="margin-top: 16px; color: #64748b; font-size: 12px;">Căn cứ Bảng lương tổng đã được Giám đốc phê duyệt • Bảo mật theo Điều 95 Bộ luật Lao động 2019/2026.</p>
             </div>
             """,
                 month, year,
                 empCode, fullName,
                 position,
                 formatDecimal(actualDays), formatDecimal(standardDays != null ? standardDays : new BigDecimal("26")), formatDecimal(otHours),
-                formatVnd(grossPay), formatVnd(bhxhNld), formatVnd(taxTncn), formatVnd(netPay)
+                formatVnd(grossPay), formatVnd(bhxhNld), formatVnd(taxTncn), formatVnd(netPay),
+                fullName
         );
     }
 
