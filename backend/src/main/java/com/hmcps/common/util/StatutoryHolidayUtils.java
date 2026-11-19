@@ -154,37 +154,32 @@ public final class StatutoryHolidayUtils {
         DayOfWeek dow = workDate.getDayOfWeek();
         String dowVi = formatVietnameseDayOfWeek(dow);
         Optional<String> holidayOpt = getHolidayName(workDate);
-        boolean isHolidayType = "HOLIDAY_200".equals(normalizedType) || "HOLIDAY_300".equals(normalizedType);
-        boolean isNightDuty = "SITE_NIGHT_DUTY".equals(normalizedType);
-        boolean isWeekendType = "WEEKEND_150".equals(normalizedType) || "WEEKEND_200".equals(normalizedType);
 
-        if (!isNightDuty) {
-            if (holidayOpt.isPresent()) {
-                if (!isHolidayType) {
-                    throw new BusinessException(
-                            "Lỗi ngày Lễ OT: Ngày " + dateVi + " là ngày lễ chính thức (" + holidayOpt.get()
-                                    + " - Điều 112 BLLĐ)! Bắt buộc chọn loại 'OT Ngày Lễ / Tết (Hệ số 200%)'."
-                    );
-                }
-            } else {
-                if (isHolidayType) {
-                    throw new BusinessException(
-                            "Lỗi ngày Lễ OT: Ngày " + dateVi + " (" + dowVi
-                                    + ") KHÔNG phải là ngày Lễ / Tết theo quy định! Không thể chọn hệ số 200% Ngày Lễ."
-                    );
-                }
-                if (isWeekendType && dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) {
-                    throw new BusinessException(
-                            "Lỗi lịch thực tế OT: Loại 'Ngày Nghỉ Hàng Tuần (150%)' chỉ áp dụng cho Thứ Bảy hoặc Chủ Nhật! Ngày "
-                                    + dateVi + " là " + dowVi + "."
-                    );
-                }
-                if ("WEEKDAY_150".equals(normalizedType) && dow == DayOfWeek.SUNDAY) {
-                    throw new BusinessException(
-                            "Lỗi lịch thực tế OT: Ngày " + dateVi
-                                    + " là Chủ Nhật (ngày nghỉ hàng tuần)! Vui lòng chọn 'OT Ngày Nghỉ Hàng Tuần (Hệ số 150%)'."
-                    );
-                }
+        if (holidayOpt.isPresent()) {
+            if (!"HOLIDAY_300".equals(normalizedType)) {
+                throw new BusinessException(
+                        "Lỗi ngày Lễ OT: Ngày " + dateVi + " là ngày lễ chính thức (" + holidayOpt.get()
+                                + " - Điều 112 BLLĐ)! Bắt buộc chọn loại 'Ngày Lễ / Tết (Hệ số 300%)'."
+                );
+            }
+        } else {
+            if ("HOLIDAY_300".equals(normalizedType)) {
+                throw new BusinessException(
+                        "Lỗi ngày Lễ OT: Ngày " + dateVi + " (" + dowVi
+                                + ") KHÔNG phải là ngày Lễ / Tết theo Điều 112 BLLĐ 2019! Không thể chọn hệ số 300% Ngày Lễ."
+                );
+            }
+            if ("WEEKEND_200".equals(normalizedType) && dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) {
+                throw new BusinessException(
+                        "Lỗi lịch thực tế OT: Loại 'Cuối Tuần Thứ 7 / CN (Hệ số 200%)' chỉ áp dụng cho Thứ Bảy hoặc Chủ Nhật! Ngày "
+                                + dateVi + " là " + dowVi + " (ngày làm việc trong tuần)."
+                );
+            }
+            if ("WEEKDAY_150".equals(normalizedType) && dow == DayOfWeek.SUNDAY) {
+                throw new BusinessException(
+                        "Lỗi lịch thực tế OT: Ngày " + dateVi
+                                + " là Chủ Nhật (ngày nghỉ hàng tuần theo Điều 111 BLLĐ)! Vui lòng chọn 'Cuối Tuần Thứ 7 / CN (Hệ số 200%)' thay vì Ngày Thường (150%)."
+                );
             }
         }
 
@@ -193,34 +188,26 @@ public final class StatutoryHolidayUtils {
             try {
                 parsedEnd = LocalTime.parse(endTimeStr.trim(), HH_MM_FMT);
             } catch (Exception e) {
-                throw new BusinessException("Định dạng giờ kết thúc (" + endTimeStr + ") không hợp lệ (HH:mm)!");
+                throw new BusinessException("Định dạng giờ kết thúc OT (" + endTimeStr + ") không hợp lệ (HH:mm)!");
             }
             int startMin = parsedStart.getHour() * 60 + parsedStart.getMinute();
             int endMin = parsedEnd.getHour() * 60 + parsedEnd.getMinute();
 
-            if (isNightDuty) {
-                // Trực đêm công trường (đổ bê tông, giám sát đêm): khung thường 22:00 hôm trước -> 04:00 - 05:00 sáng hôm sau
-                boolean validNightDutyWindow = startMin >= 21 * 60 && endMin <= 6 * 60 && endMin < startMin;
-                if (!validNightDutyWindow) {
-                    throw new BusinessException(
-                            "Lỗi khung giờ Trực Đêm Công Trường: Chỉ áp dụng khung trực đêm qua ngày (bắt đầu từ 21:00–23:59 đêm hôm trước, kết thúc 03:00–06:00 sáng hôm sau; chuẩn 22:00 - 05:00)!"
-                    );
-                }
-            } else if ("NIGHT_OT_150".equals(normalizedType) || "NIGHT_SHIFT_ADDITIONAL".equals(normalizedType)) {
+            if ("NIGHT_SHIFT_ADDITIONAL".equals(normalizedType)) {
                 boolean overlapsNightWindow = (endMin <= startMin)
                         || startMin >= 22 * 60
                         || endMin > 22 * 60
                         || startMin < 6 * 60;
                 if (!overlapsNightWindow) {
                     throw new BusinessException(
-                            "Lỗi khung giờ OT Ban Đêm: Chỉ áp dụng khi khoảng thời gian ("
+                            "Lỗi khung giờ Ca Đêm: Ca Đêm 22h - 06h (Điều 106 BLLĐ) chỉ áp dụng khi khoảng thời gian OT ("
                                     + startTimeStr + " - " + endTimeStr + ") nằm trong khung 22:00 đến 06:00 sáng hôm sau!"
                     );
                 }
             }
 
             int diffMin = endMin - startMin;
-            if ((isNightDuty || "NIGHT_OT_150".equals(normalizedType) || "NIGHT_SHIFT_ADDITIONAL".equals(normalizedType)) && endMin <= startMin) {
+            if ("NIGHT_SHIFT_ADDITIONAL".equals(normalizedType) && endMin <= startMin) {
                 diffMin += 24 * 60;
             }
             if (diffMin <= 0) {
@@ -229,7 +216,7 @@ public final class StatutoryHolidayUtils {
             double expectedHours = diffMin / 60.0;
             if (otHours != null && Math.abs(otHours - expectedHours) > 0.1) {
                 throw new BusinessException(
-                        "Lỗi đối soát giờ: Tổng số giờ nhập (" + otHours + "h) không khớp với khoảng thời gian từ "
+                        "Lỗi đối soát giờ OT: Tổng số giờ nhập (" + otHours + "h) không khớp với khoảng thời gian từ "
                                 + startTimeStr + " đến " + endTimeStr + " (" + String.format("%.1f", expectedHours) + "h)!"
                 );
             }
@@ -238,20 +225,21 @@ public final class StatutoryHolidayUtils {
         double maxHours = "WEEKDAY_150".equals(normalizedType) ? 4.0 : 12.0;
         if (otHours != null) {
             if (otHours <= 0) {
-                throw new BusinessException("Số giờ đăng ký phải lớn hơn 0!");
+                throw new BusinessException("Số giờ đăng ký OT phải lớn hơn 0!");
             }
             if (otHours > maxHours) {
                 throw new BusinessException(
-                        "Số giờ đăng ký (" + otHours + "h) vượt mức trần tối đa cho phép (" + maxHours + "h/ngày)!"
+                        "Vi phạm Điều 107 Bộ luật Lao động 2019: Số giờ OT (" + otHours + "h) vượt mức trần tối đa cho phép (" + maxHours + "h/ngày)!"
                 );
             }
         }
 
         return switch (normalizedType) {
-            case "WEEKDAY_150", "WEEKEND_150", "WEEKEND_200", "NIGHT_OT_150", "NIGHT_SHIFT_ADDITIONAL" -> 1.5;
-            case "HOLIDAY_200", "HOLIDAY_300" -> 2.0;
-            case "SITE_NIGHT_DUTY" -> 0.0; // Quy đổi 1.5 ngày công trực tiếp (1 công nghỉ bù + 0.5 công đêm), không tính tiền OT lẻ
-            default -> throw new BusinessException("Loại ca tăng ca / trực đêm (otType=" + normalizedType + ") không hợp lệ!");
+            case "WEEKDAY_150" -> 1.5;
+            case "WEEKEND_200" -> 2.0;
+            case "NIGHT_SHIFT_ADDITIONAL" -> 1.8;
+            case "HOLIDAY_300" -> 3.0;
+            default -> throw new BusinessException("Loại ca tăng ca (otType=" + normalizedType + ") không hợp lệ!");
         };
     }
 }
