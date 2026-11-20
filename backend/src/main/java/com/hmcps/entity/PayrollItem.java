@@ -197,6 +197,10 @@ public class PayrollItem {
     @Builder.Default
     private BigDecimal truyThuThueTncn = BigDecimal.ZERO; // Truy thu thuế TNCN
 
+    @Column(precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal giamTruXepLoai = BigDecimal.ZERO; // Giảm trừ xếp loại C theo quy định
+
     @Column(precision = 15, scale = 2, nullable = false)
     private BigDecimal tongThuNhap; // TỔNG THU NHẬP GROSS
 

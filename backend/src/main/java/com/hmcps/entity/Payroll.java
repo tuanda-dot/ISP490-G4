@@ -30,10 +30,10 @@ public class Payroll {
     @Column(name = "period_year", nullable = false)
     private Integer year;
 
-    // Số ngày công chuẩn của kỳ lương (thường 26 ngày)
+    // Số ngày công chuẩn của kỳ lương (thống nhất 22,5 ngày/tháng)
     @Column(precision = 5, scale = 2, nullable = false)
     @Builder.Default
-    private BigDecimal standardWorkDays = new BigDecimal("26.00");
+    private BigDecimal standardWorkDays = new BigDecimal("22.50");
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, columnDefinition = "VARCHAR(30)")
