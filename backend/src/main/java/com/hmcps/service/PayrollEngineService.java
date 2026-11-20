@@ -2,6 +2,7 @@ package com.hmcps.service;
 
 import com.hmcps.common.constants.LaborLawConstants;
 import com.hmcps.common.enums.*;
+import com.hmcps.common.exception.BusinessException;
 import com.hmcps.common.util.PayrollRoundingUtils;
 import com.hmcps.entity.*;
 import com.hmcps.repository.*;
@@ -44,6 +45,7 @@ public class PayrollEngineService {
     private final MonthlyTimesheetRepository timesheetRepository;
     private final EngineerAssignmentRepository assignmentRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
+    private final PerformanceEvaluationRepository performanceEvaluationRepository;
 
     private static final File BF10_STATE_FILE = new File("./target/hmcps_bf10_state.json");
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -54,6 +56,52 @@ public class PayrollEngineService {
         private BigDecimal siteLodging;
         private BigDecimal hazard;
         private BigDecimal projectResponsibility;
+    }
+
+    /**
+     * Quy chế tiền lương Hải Minh:
+     * - KHÔNG tính lương trên bảng lương nhân viên cho Ban Giám đốc (DIRECTOR / CEO).
+     * - VẪN tính lương đầy đủ theo HĐLĐ cho các Trưởng phòng (HR_MANAGER, CHIEF_ACCOUNTANT),
+     *   Kỹ sư trưởng / Chỉ huy trưởng công trường (SITE_MANAGER) và toàn bộ nhân viên, kỹ sư.
+     */
+    public static boolean isExcludedDepartmentManager(Employee emp) {
+        if (emp == null) return false;
+        String r = emp.getRole() != null ? emp.getRole().trim().toUpperCase(java.util.Locale.ROOT).replaceFirst("^ROLE_", "") : "";
+        String p = emp.getPosition() != null ? emp.getPosition().trim().toLowerCase(java.util.Locale.ROOT) : "";
+        if (java.util.Set.of("DIRECTOR", "CEO").contains(r)) {
+            return true;
+        }
+        return p.contains("tổng giám đốc")
+                || p.contains("tong giam doc")
+                || p.contains("giám đốc")
+                || p.contains("giam doc");
+    }
+
+    /**
+     * Quy chế phúc lợi Hải Minh (Note OT.docx):
+     * Nghỉ ốm dài ngày (SICK_LONG - nằm viện/điều trị dài hạn):
+     * - Cấp Trưởng phòng trở lên (HR_MANAGER, CHIEF_ACCOUNTANT, SITE_MANAGER / Chỉ huy trưởng / isDepartmentHead):
+     *   Được hưởng 50% lương cơ bản theo ngày công (quy đổi 0,5 công hưởng lương / ngày nghỉ ốm dài).
+     * - Cấp Nhân viên / Kỹ sư: 0% lương (Công đoàn & công ty thăm hỏi riêng).
+     */
+    public static boolean isSickLongHalfPayManager(Employee emp) {
+        if (emp == null) return false;
+        if (Boolean.TRUE.equals(emp.getIsDepartmentHead())) return true;
+        String r = emp.getRole() != null ? emp.getRole().trim().toUpperCase(java.util.Locale.ROOT).replaceFirst("^ROLE_", "") : "";
+        if (java.util.Set.of("HR_MANAGER", "CHIEF_ACCOUNTANT", "SITE_MANAGER", "DIRECTOR", "CEO").contains(r)) {
+            return true;
+        }
+        String p = emp.getPosition() != null ? emp.getPosition().trim().toLowerCase(java.util.Locale.ROOT) : "";
+        return p.contains("trưởng phòng")
+                || p.contains("truong phong")
+                || p.contains("kế toán trưởng")
+                || p.contains("ke toan truong")
+                || p.contains("chỉ huy trưởng")
+                || p.contains("chi huy truong")
+                || p.contains("kỹ sư trưởng")
+                || p.contains("ky su truong")
+                || p.contains("giám đốc")
+                || p.contains("giam doc");
     }
 
     /**
@@ -139,6 +187,7 @@ public class PayrollEngineService {
         private BigDecimal hoanThueTncn;
         private BigDecimal thuNhapKhac;
         private BigDecimal truyThuThueTncn;
+        private BigDecimal giamTruXepLoai;
         private Boolean haiMinhStandardMode;
         // Tách giờ OT theo đúng hệ số từng đơn đã duyệt/hậu kiểm (150%, 200%, 300%, ca đêm 180%)
         private List<OvertimeRequest> approvedOvertimeItems;
@@ -151,6 +200,39 @@ public class PayrollEngineService {
         Employee emp = input.getEmployee();
         Contract contract = input.getContract();
         MonthlyTimesheet ts = input.getTimesheet();
+
+        // Quy chế Hải Minh: Không tính lương cho Ban Giám đốc (vẫn tính đầy đủ cho các Trưởng phòng, Kỹ sư trưởng & Nhân viên)
+        if (isExcludedDepartmentManager(emp)) {
+            return PayrollItem.builder()
+                    .payrollId(payrollId)
+                    .employeeId(emp.getId())
+                    .employeeCode(emp.getEmployeeCode())
+                    .fullName(emp.getFullName())
+                    .position(emp.getPosition())
+                    .employeeType(emp.getEmployeeType())
+                    .insuranceFlag(InsuranceFlag.NO_INSURANCE)
+                    .taxFlag(TaxFlag.COMMITMENT)
+                    .congChuan(ts != null && ts.getStandardWorkDays() != null ? ts.getStandardWorkDays() : LaborLawConstants.STANDARD_WORK_DAYS_DEFAULT)
+                    .congChinhThuc(BigDecimal.ZERO).congThuViec(BigDecimal.ZERO).congTinhCom(BigDecimal.ZERO)
+                    .ngayCongHuongPhuCap(BigDecimal.ZERO).ngayCongCongTac(BigDecimal.ZERO)
+                    .ngayNghiPhep(BigDecimal.ZERO).ngayNghiLe(BigDecimal.ZERO).ngayNghiKhongLuong(BigDecimal.ZERO)
+                    .overtimeHours(BigDecimal.ZERO).nightHours(BigDecimal.ZERO)
+                    .mucLuong(BigDecimal.ZERO).heSoNangSuat(BigDecimal.ZERO).phuCapLuong(BigDecimal.ZERO)
+                    .luongHieuQuaKhoan(BigDecimal.ZERO).xepLoaiDanhGia("N/A").tyLeHieuQua(BigDecimal.ZERO).luongHieuQuaThucHuong(BigDecimal.ZERO)
+                    .troCapThuViec(BigDecimal.ZERO).phuCapChucVu(BigDecimal.ZERO).phuCapThamNien(BigDecimal.ZERO)
+                    .phuCapCom(BigDecimal.ZERO).phuCapXangXe(BigDecimal.ZERO).phuCapDienThoai(BigDecimal.ZERO)
+                    .phuCapLuuTru(BigDecimal.ZERO).phuCapDocHai(BigDecimal.ZERO).phuCapTrachNhiem(BigDecimal.ZERO).phuCapCongTac(BigDecimal.ZERO)
+                    .thuNhap(BigDecimal.ZERO).luongTangCa(BigDecimal.ZERO).phuTroiDem(BigDecimal.ZERO)
+                    .thuongDuAn(BigDecimal.ZERO).hoanThueTncn(BigDecimal.ZERO).thuNhapKhac(BigDecimal.ZERO).truyThuThueTncn(BigDecimal.ZERO).giamTruXepLoai(BigDecimal.ZERO)
+                    .tongThuNhap(BigDecimal.ZERO).insuranceBase(BigDecimal.ZERO)
+                    .bhxhNld(BigDecimal.ZERO).bhytNld(BigDecimal.ZERO).bhtnNld(BigDecimal.ZERO).congBhNld(BigDecimal.ZERO)
+                    .bhxhDn(BigDecimal.ZERO).bhytDn(BigDecimal.ZERO).bhtnDn(BigDecimal.ZERO).tnldDn(BigDecimal.ZERO).kpcdDn(BigDecimal.ZERO).congBhDn(BigDecimal.ZERO)
+                    .slNpt(0).gtBanThan(BigDecimal.ZERO).gtNpt(BigDecimal.ZERO)
+                    .comMienThue(BigDecimal.ZERO).chenhLechLtg(BigDecimal.ZERO).phuTroiDemMienThue(BigDecimal.ZERO)
+                    .tnct(BigDecimal.ZERO).tntt(BigDecimal.ZERO).thueTncn(BigDecimal.ZERO)
+                    .phiCongDoanVien(BigDecimal.ZERO).thucNhan(BigDecimal.ZERO)
+                    .build();
+        }
 
         // 1. KHỐI B: Ngày công
         BigDecimal congChuan = ts.getStandardWorkDays() != null && ts.getStandardWorkDays().compareTo(BigDecimal.ZERO) > 0
@@ -213,13 +295,16 @@ public class PayrollEngineService {
         BigDecimal hoanThueTncn = input.getHoanThueTncn() != null ? input.getHoanThueTncn() : BigDecimal.ZERO;
         BigDecimal thuNhapKhac = input.getThuNhapKhac() != null ? input.getThuNhapKhac() : BigDecimal.ZERO;
         BigDecimal truyThuThueTncn = input.getTruyThuThueTncn() != null ? input.getTruyThuThueTncn() : BigDecimal.ZERO;
+        BigDecimal giamTruXepLoai = input.getGiamTruXepLoai() != null ? input.getGiamTruXepLoai() : BigDecimal.ZERO;
 
         // 4. KHỐI E: Thu nhập & Tổng thu nhập (GROSS)
+        BigDecimal holidayBaseDays = totalActualDays.add(ngayNghiLe);
         BigDecimal thuNhapChinh;
         if (isHaiMinhMode) {
             // Công thức chuẩn Phiếu lương thực tế Hải Minh (Phieu luong.xlsx):
+            // Nghỉ Lễ, Tết (ngayNghiLe) hưởng 100% Lương cơ bản; Lương HQCV tính trên ngày đi làm + phép hợp lệ
             BigDecimal luongCoBanThucHuong = congChuan.compareTo(BigDecimal.ZERO) > 0
-                    ? mucLuong.multiply(totalActualDays).divide(congChuan, 0, RoundingMode.HALF_UP)
+                    ? mucLuong.multiply(holidayBaseDays).divide(congChuan, 0, RoundingMode.HALF_UP)
                     : BigDecimal.ZERO;
             luongHieuQuaThucHuong = congChuan.compareTo(BigDecimal.ZERO) > 0
                     ? luongHieuQuaKhoan.multiply(totalActualDays).multiply(tyLeHieuQua).divide(congChuan, 0, RoundingMode.HALF_UP)
@@ -279,17 +364,24 @@ public class PayrollEngineService {
                     .add(phuCapDocHai)
                     .add(phuCapTrachNhiem);
 
-            // Proration theo ngày công thực tế
+            // Nghỉ Lễ, Tết hưởng nguyên Lương Cơ Bản; ngày công đi làm hưởng trọn đơn giá cố định
+            BigDecimal holidayBasePay = (congChuan.compareTo(BigDecimal.ZERO) > 0 && ngayNghiLe.compareTo(BigDecimal.ZERO) > 0)
+                    ? mucLuong.multiply(ngayNghiLe).divide(congChuan, 6, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
             thuNhapChinh = congChuan.compareTo(BigDecimal.ZERO) > 0
                     ? totalFixedBase.divide(congChuan, 6, RoundingMode.HALF_UP)
                             .multiply(totalActualDays)
+                            .add(holidayBasePay)
                             .add(phuCapCom)
                             .setScale(2, RoundingMode.HALF_UP)
                     : phuCapCom;
         }
 
-        // Tiền lương làm thêm giờ (OT) - Đ.98.1 & Đ.98.2 BLLĐ, Thông tư 111/2013/TT-BTC
-        // Đơn giá lương giờ chuẩn = mucLuong / (congChuan x 8)
+        // Tiền lương làm thêm giờ (OT) theo quy chế Hải Minh:
+        //  - Ngày thường, ban đêm, ngày nghỉ hàng tuần (T7/CN): 150%
+        //  - Ngày Lễ, Tết: 200%
+        //  - Trực đêm công trường (SITE_NIGHT_DUTY): Quy đổi 1.5 ngày công trực tiếp (tối đa 10 buổi/tháng), KHÔNG tính OT giờ lẻ
         BigDecimal hourlyRate = congChuan.compareTo(BigDecimal.ZERO) > 0
                 ? mucLuong.divide(congChuan.multiply(LaborLawConstants.STANDARD_WORK_HOURS_PER_DAY), 4, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
@@ -302,68 +394,39 @@ public class PayrollEngineService {
         List<OvertimeRequest> approvedOts = input.getApprovedOvertimeItems();
         if (approvedOts != null && !approvedOts.isEmpty()) {
             BigDecimal itemizedDayOtHours = BigDecimal.ZERO;
-            BigDecimal itemizedNightHours = BigDecimal.ZERO;
 
             for (OvertimeRequest ot : approvedOts) {
                 if (!"APPROVED".equalsIgnoreCase(ot.getStatus())) continue;
+                String otType = ot.getOtType() != null ? ot.getOtType().trim().toUpperCase() : "WEEKDAY_150";
+                if ("SITE_NIGHT_DUTY".equals(otType) || Boolean.TRUE.equals(ot.getIsNightDuty())) {
+                    continue; // Trực đêm đã quy đổi thành 1.5 ngày công vào bảng công
+                }
                 BigDecimal otH = ot.getPayableOtHours() != null
                         ? ot.getPayableOtHours()
                         : (ot.getOtHours() != null ? ot.getOtHours() : BigDecimal.ZERO);
                 if (otH.compareTo(BigDecimal.ZERO) <= 0) continue;
 
-                String otType = ot.getOtType() != null ? ot.getOtType().trim().toUpperCase() : "WEEKDAY_150";
-                BigDecimal mult = ot.getMultiplier();
-                if (mult == null || mult.compareTo(BigDecimal.ZERO) <= 0) {
-                    mult = switch (otType) {
-                        case "HOLIDAY_300" -> LaborLawConstants.MULTIPLIER_OT_HOLIDAY;
-                        case "WEEKEND_200" -> LaborLawConstants.MULTIPLIER_OT_WEEKEND;
-                        case "NIGHT_SHIFT_ADDITIONAL" -> new BigDecimal("1.80");
-                        default -> LaborLawConstants.MULTIPLIER_OT_WEEKDAY;
-                    };
-                }
-
-                if ("NIGHT_SHIFT_ADDITIONAL".equals(otType)) {
-                    // Ca đêm OT: 150% OT (trong đó 50% miễn thuế) + 30% phụ trội đêm (toàn bộ 30% miễn thuế)
-                    BigDecimal baseOtPay = otH.multiply(hourlyRate).multiply(LaborLawConstants.MULTIPLIER_OT_WEEKDAY);
-                    BigDecimal nightExtra = otH.multiply(hourlyRate).multiply(LaborLawConstants.SURCHARGE_NIGHT_SHIFT);
-                    luongTangCa = luongTangCa.add(baseOtPay);
-                    chenhLechLtg = chenhLechLtg.add(otH.multiply(hourlyRate).multiply(new BigDecimal("0.50")));
-                    phuTroiDem = phuTroiDem.add(nightExtra);
-                    phuTroiDemMienThue = phuTroiDemMienThue.add(nightExtra);
-                    itemizedNightHours = itemizedNightHours.add(otH);
-                } else {
-                    // Ngày thường 150% (miễn 50%), Cuối tuần 200% (miễn 100%), Ngày lễ 300% (miễn 200%)
-                    BigDecimal pay = otH.multiply(hourlyRate).multiply(mult);
-                    BigDecimal exemptRatio = mult.subtract(BigDecimal.ONE).max(BigDecimal.ZERO);
-                    luongTangCa = luongTangCa.add(pay);
-                    chenhLechLtg = chenhLechLtg.add(otH.multiply(hourlyRate).multiply(exemptRatio));
-                    itemizedDayOtHours = itemizedDayOtHours.add(otH);
-                }
+                boolean isHolidayOt = "HOLIDAY_200".equals(otType) || "HOLIDAY_300".equals(otType);
+                BigDecimal mult = isHolidayOt ? LaborLawConstants.MULTIPLIER_OT_HOLIDAY : LaborLawConstants.MULTIPLIER_OT_WEEKDAY;
+                BigDecimal pay = otH.multiply(hourlyRate).multiply(mult);
+                BigDecimal exemptRatio = mult.subtract(BigDecimal.ONE).max(BigDecimal.ZERO);
+                luongTangCa = luongTangCa.add(pay);
+                chenhLechLtg = chenhLechLtg.add(otH.multiply(hourlyRate).multiply(exemptRatio));
+                itemizedDayOtHours = itemizedDayOtHours.add(otH);
             }
 
-            // Cộng phần giờ dư từ máy chấm công (nếu có) chưa gắn đơn chi tiết ở mức cơ sở
             BigDecimal residualOt = overtimeHours.subtract(itemizedDayOtHours).max(BigDecimal.ZERO);
             if (residualOt.compareTo(BigDecimal.ZERO) > 0) {
                 luongTangCa = luongTangCa.add(residualOt.multiply(hourlyRate).multiply(LaborLawConstants.MULTIPLIER_OT_WEEKDAY));
                 chenhLechLtg = chenhLechLtg.add(residualOt.multiply(hourlyRate).multiply(new BigDecimal("0.50")));
             }
-            BigDecimal residualNight = nightHours.subtract(itemizedNightHours).max(BigDecimal.ZERO);
-            if (residualNight.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal resNightPay = residualNight.multiply(hourlyRate).multiply(LaborLawConstants.SURCHARGE_NIGHT_SHIFT);
-                phuTroiDem = phuTroiDem.add(resNightPay);
-                phuTroiDemMienThue = phuTroiDemMienThue.add(resNightPay);
-            }
 
             luongTangCa = luongTangCa.setScale(2, RoundingMode.HALF_UP);
             chenhLechLtg = chenhLechLtg.setScale(2, RoundingMode.HALF_UP);
-            phuTroiDem = phuTroiDem.setScale(2, RoundingMode.HALF_UP);
-            phuTroiDemMienThue = phuTroiDemMienThue.setScale(2, RoundingMode.HALF_UP);
         } else {
-            // Fallback khi chưa có danh sách đơn OvertimeRequest chi tiết (chấm công máy mặc định 150% + đêm 30%)
+            // Fallback khi chưa có danh sách đơn OvertimeRequest chi tiết: ngày thường / đêm / cuối tuần áp phẳng 150%
             luongTangCa = overtimeHours.multiply(hourlyRate).multiply(LaborLawConstants.MULTIPLIER_OT_WEEKDAY).setScale(2, RoundingMode.HALF_UP);
             chenhLechLtg = overtimeHours.multiply(hourlyRate).multiply(new BigDecimal("0.50")).setScale(2, RoundingMode.HALF_UP);
-            phuTroiDem = nightHours.multiply(hourlyRate).multiply(LaborLawConstants.SURCHARGE_NIGHT_SHIFT).setScale(2, RoundingMode.HALF_UP);
-            phuTroiDemMienThue = phuTroiDem;
         }
 
         BigDecimal thuongDuAn = input.getThuongDuAn() != null ? input.getThuongDuAn() : BigDecimal.ZERO;
@@ -398,7 +461,9 @@ public class PayrollEngineService {
 
             // Prorate nền đóng bảo hiểm theo ngày công thực tế / công chuẩn
             // Theo Phiếu lương Hải Minh (Phieu luong.xlsx: =10.5%*D13) & Luật BHXH: nghỉ không lương < 14 ngày đóng đủ 100% nền BHXH
-            BigDecimal unpaidDaysForBh = congChuan.subtract(totalActualDays);
+            BigDecimal unpaidDaysForBh = congChuan.compareTo(totalActualDays) > 0
+                    ? congChuan.subtract(totalActualDays)
+                    : BigDecimal.ZERO;
             BigDecimal proratedBase;
             if (isHaiMinhMode) {
                 proratedBase = (totalActualDays.compareTo(BigDecimal.ZERO) > 0 && unpaidDaysForBh.compareTo(new BigDecimal("14")) < 0)
@@ -411,11 +476,15 @@ public class PayrollEngineService {
 
             BigDecimal bhxhCap = complianceService.getBhxhCap();
             BigDecimal bhtnCap = complianceService.getBhtnCap();
+            BigDecimal regionalMinWage = complianceService.getRegionalMinWage();
+            BigDecimal effectiveFloor = (isHaiMinhMode && proratedBase.compareTo(BigDecimal.ZERO) > 0 && regionalMinWage != null)
+                    ? regionalMinWage
+                    : BigDecimal.ZERO;
 
-            // Áp trần BHXH/BHYT (20 lần mức tham chiếu = 46.800.000đ)
-            BigDecimal baseBhxh = PayrollRoundingUtils.clamp(proratedBase, BigDecimal.ZERO, bhxhCap);
-            // Áp trần BHTN (20 lần lương tối thiểu Vùng I = 106.200.000đ)
-            BigDecimal baseBhtn = PayrollRoundingUtils.clamp(proratedBase, BigDecimal.ZERO, bhtnCap);
+            // Áp sàn tối thiểu vùng I (5.310.000đ khi có tham gia BH) & trần BHXH/BHYT (20 lần mức tham chiếu = 46.800.000đ)
+            BigDecimal baseBhxh = PayrollRoundingUtils.clamp(proratedBase, effectiveFloor.min(bhxhCap), bhxhCap);
+            // Áp sàn tối thiểu vùng I & trần BHTN (20 lần lương tối thiểu Vùng I = 106.200.000đ)
+            BigDecimal baseBhtn = PayrollRoundingUtils.clamp(proratedBase, effectiveFloor.min(bhtnCap), bhtnCap);
 
             insuranceBase = baseBhxh;
 
@@ -498,8 +567,13 @@ public class PayrollEngineService {
             phiCongDoanVien = phiCongDoanVien.setScale(2, RoundingMode.HALF_UP);
         }
 
-        // THỰC NHẬN = Tổng thu nhập - BH NLĐ - Thuế TNCN - Phí công đoàn viên - Truy thu thuế TNCN
-        BigDecimal rawThucNhan = tongThuNhap.subtract(congBhNld).subtract(thueTncn).subtract(phiCongDoanVien).subtract(truyThuThueTncn);
+        // THỰC NHẬN = Tổng thu nhập - BH NLĐ - Thuế TNCN - Phí công đoàn viên - Truy thu thuế TNCN - Giảm trừ xếp loại C
+        BigDecimal rawThucNhan = tongThuNhap
+                .subtract(congBhNld)
+                .subtract(thueTncn)
+                .subtract(phiCongDoanVien)
+                .subtract(truyThuThueTncn)
+                .subtract(giamTruXepLoai);
         if (rawThucNhan.compareTo(BigDecimal.ZERO) < 0) {
             rawThucNhan = BigDecimal.ZERO;
         }
@@ -552,6 +626,7 @@ public class PayrollEngineService {
                 .hoanThueTncn(hoanThueTncn)
                 .thuNhapKhac(thuNhapKhac)
                 .truyThuThueTncn(truyThuThueTncn)
+                .giamTruXepLoai(giamTruXepLoai)
                 .tongThuNhap(tongThuNhap)
                 .insuranceBase(insuranceBase)
                 .bhxhNld(bhxhNld)
@@ -660,6 +735,14 @@ public class PayrollEngineService {
                             .build());
                 });
 
+        if (payroll.getStatus() == PayrollStatus.APPROVED
+                || payroll.getStatus() == PayrollStatus.LOCKED
+                || payroll.getStatus() == PayrollStatus.PAID) {
+            throw new BusinessException("Kỳ lương " + payroll.getPayrollCode()
+                    + " đang ở trạng thái " + payroll.getStatus()
+                    + ", đã khóa sổ/phê duyệt nên không được phép tính toán lại!");
+        }
+
         // Nếu kỳ lương đã tồn tại các mục chi tiết hoặc phân bổ chi phí trước đó, xóa bỏ để tính toán lại chính xác
         if (payroll.getId() != null) {
             costAllocationRepository.deleteByPayrollId(payroll.getId());
@@ -702,6 +785,25 @@ public class PayrollEngineService {
                     .filter(ot -> "APPROVED".equalsIgnoreCase(ot.getStatus()))
                     .toList();
 
+            PerformanceEvaluation monthlyEval = performanceEvaluationRepository != null
+                    ? performanceEvaluationRepository.findByEmployeeIdAndEvalYearAndEvalMonth(emp.getId(), year, month).orElse(null)
+                    : null;
+            String evalGrade = monthlyEval != null && monthlyEval.getGrade() != null
+                    ? monthlyEval.getGrade() : emp.getEvaluationGrade();
+            BigDecimal evalPct = monthlyEval != null && monthlyEval.getEvaluationPct() != null
+                    ? monthlyEval.getEvaluationPct() : emp.getEvaluationPct();
+            BigDecimal evalRewardBonus = (monthlyEval != null
+                    && "FIXED_BONUS".equalsIgnoreCase(monthlyEval.getRewardChoice())
+                    && monthlyEval.getRewardBonusAmount() != null)
+                    ? monthlyEval.getRewardBonusAmount()
+                    : BigDecimal.ZERO;
+            BigDecimal evalDeduction = (monthlyEval != null
+                    && "C".equalsIgnoreCase(monthlyEval.getGrade())
+                    && "DEDUCTION".equalsIgnoreCase(monthlyEval.getCActionType())
+                    && monthlyEval.getDeductionAmount() != null)
+                    ? monthlyEval.getDeductionAmount()
+                    : BigDecimal.ZERO;
+
             PayrollCalculationInput input = PayrollCalculationInput.builder()
                     .employee(emp)
                     .contract(contract)
@@ -716,8 +818,10 @@ public class PayrollEngineService {
                     .phuCapDocHai(allowances.getHazard())
                     .phuCapTrachNhiem(allowances.getProjectResponsibility())
                     .luongHieuQua(emp.getPerformanceSalary())
-                    .xepLoaiDanhGia(emp.getEvaluationGrade())
-                    .tyLeHieuQua(emp.getEvaluationPct())
+                    .xepLoaiDanhGia(evalGrade)
+                    .tyLeHieuQua(evalPct)
+                    .thuNhapKhac(evalRewardBonus)
+                    .giamTruXepLoai(evalDeduction)
                     .haiMinhStandardMode(emp.getPerformanceSalary() != null)
                     .thuongDuAn(BigDecimal.ZERO)
                     .approvedOvertimeItems(approvedOtItems)
@@ -730,8 +834,10 @@ public class PayrollEngineService {
             totalNet = totalNet.add(item.getThucNhan());
             totalEmployerCost = totalEmployerCost.add(item.getCongBhDn());
 
-            // Phân bổ chi phí dự án (Project Cost Allocation)
-            allocateProjectCosts(payroll, item, emp);
+            // Phân bổ chi phí dự án (Trưởng phòng miễn tính lương không phát sinh chi phí hạch toán)
+            if (item.getTongThuNhap().compareTo(BigDecimal.ZERO) > 0 || item.getCongBhDn().compareTo(BigDecimal.ZERO) > 0) {
+                allocateProjectCosts(payroll, item, emp);
+            }
         }
 
         payroll.setTotalGrossSalary(totalGross);
@@ -773,7 +879,9 @@ public class PayrollEngineService {
                         .allocatedAmount(totalCost)
                         .build());
             } else {
-                // Chia đều cho các dự án đang tham gia (TK 622 - Nhân công trực tiếp)
+                // Chỉ huy trưởng, Kỹ sư trưởng, cán bộ HSE / an toàn công trường -> TK 627 (Chi phí sản xuất chung công trường)
+                // Kỹ sư thi công / kỹ thuật trực tiếp -> TK 622 (Chi phí nhân công trực tiếp)
+                AccountCode projectAccountCode = isSiteSupervisoryStaff(emp) ? AccountCode.TK_627 : AccountCode.TK_622;
                 BigDecimal ratio = BigDecimal.ONE.divide(BigDecimal.valueOf(assignments.size()), 4, RoundingMode.HALF_UP);
                 BigDecimal amountPerProject = totalCost.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
 
@@ -783,12 +891,35 @@ public class PayrollEngineService {
                             .payrollId(payroll.getId())
                             .employeeId(emp.getId())
                             .projectId(assign.getProjectId())
-                            .accountCode(AccountCode.TK_622)
+                            .accountCode(projectAccountCode)
                             .allocationRatio(ratio)
                             .allocatedAmount(amountPerProject)
                             .build());
                 }
             }
         }
+    }
+
+    /**
+     * Phân loại nhân sự quản lý/giám sát chung công trường (Chỉ huy trưởng, Kỹ sư trưởng, An toàn/HSE)
+     * để hạch toán vào TK 627 thay vì TK 622 theo chuẩn Thông tư 200.
+     */
+    private static boolean isSiteSupervisoryStaff(Employee emp) {
+        if (emp == null) return false;
+        String code = emp.getEmployeeCode() != null ? emp.getEmployeeCode().trim().toUpperCase(java.util.Locale.ROOT) : "";
+        String role = emp.getRole() != null ? emp.getRole().trim().toUpperCase(java.util.Locale.ROOT) : "";
+        String pos = emp.getPosition() != null ? emp.getPosition().trim().toLowerCase(java.util.Locale.ROOT) : "";
+
+        return "HM-005".equals(code)
+                || "HM-012".equals(code)
+                || "ROLE_SITE_MANAGER".equals(role)
+                || "SITE_MANAGER".equals(role)
+                || "ROLE_HSE".equals(role)
+                || "HSE".equals(role)
+                || pos.contains("chỉ huy")
+                || pos.contains("kỹ sư trưởng")
+                || pos.contains("hse")
+                || pos.contains("an toàn")
+                || pos.contains("giám sát công trường");
     }
 }
