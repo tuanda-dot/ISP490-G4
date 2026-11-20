@@ -128,6 +128,11 @@ public class PayrollController {
     @PostMapping("/{payrollId}/submit-to-chief")
     public ResponseEntity<?> submitToChief(@PathVariable Long payrollId) {
         Payroll payroll = resolvePayrollForWorkflow(payrollId);
+        if (payroll.getStatus() != PayrollStatus.CALCULATED) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Chỉ có thể trình Kế toán trưởng thẩm định khi bảng lương đang ở trạng thái CALCULATED (trạng thái hiện tại: " + payroll.getStatus() + ")"
+            ));
+        }
         payroll.setStatus(PayrollStatus.SUBMITTED);
         payroll.setUpdatedAt(LocalDateTime.now());
         return ResponseEntity.ok(payrollRepository.save(payroll));
@@ -142,9 +147,12 @@ public class PayrollController {
             @PathVariable Long payrollId,
             @RequestBody(required = false) WorkflowActionRequest request) {
         Payroll payroll = resolvePayrollForWorkflow(payrollId);
-        if (payroll.getStatus() == PayrollStatus.DRAFT) {
+        if (payroll.getStatus() == PayrollStatus.DRAFT
+                || payroll.getStatus() == PayrollStatus.APPROVED
+                || payroll.getStatus() == PayrollStatus.LOCKED
+                || payroll.getStatus() == PayrollStatus.PAID) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "Bảng lương đang ở trạng thái DRAFT, vui lòng chạy tính lương trước khi Kế toán trưởng thẩm định!"
+                    "message", "Không thể thẩm định ở trạng thái hiện tại (" + payroll.getStatus() + "): Bảng lương chưa tính toán hoặc đã phê duyệt/khóa sổ!"
             ));
         }
         if (request != null) {
@@ -177,8 +185,24 @@ public class PayrollController {
             @PathVariable Long payrollId,
             @RequestBody(required = false) WorkflowActionRequest request) {
         Payroll payroll = resolvePayrollForWorkflow(payrollId);
-        if (request != null && request.getExplanation() != null && !request.getExplanation().isBlank()) {
-            payroll.setChiefAccountantExplanation(request.getExplanation().trim());
+        if (payroll.getStatus() == PayrollStatus.DRAFT
+                || payroll.getStatus() == PayrollStatus.APPROVED
+                || payroll.getStatus() == PayrollStatus.LOCKED
+                || payroll.getStatus() == PayrollStatus.PAID) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Không thể trả lại hồ sơ ở trạng thái hiện tại (" + payroll.getStatus() + "): Bảng lương chưa tính toán hoặc đã phê duyệt/khóa sổ!"
+            ));
+        }
+        String note = null;
+        if (request != null) {
+            if (request.getExplanation() != null && !request.getExplanation().isBlank()) {
+                note = request.getExplanation().trim();
+            } else if (request.getReason() != null && !request.getReason().isBlank()) {
+                note = request.getReason().trim();
+            }
+        }
+        if (note != null) {
+            payroll.setChiefAccountantExplanation(note);
             payroll.setAdjustedAt(LocalDateTime.now());
         }
         if (request != null && request.getAdjustedProjectBudgetsJson() != null && !request.getAdjustedProjectBudgetsJson().isBlank()) {
@@ -203,6 +227,11 @@ public class PayrollController {
             ));
         }
         Payroll payroll = resolvePayrollForWorkflow(payrollId);
+        if (payroll.getStatus() != PayrollStatus.REVIEWED) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Giám đốc chỉ có thể từ chối tờ trình ngân sách khi Kế toán trưởng đã thẩm định (trạng thái REVIEWED, hiện tại: " + payroll.getStatus() + ")"
+            ));
+        }
         payroll.setStatus(PayrollStatus.DIRECTOR_REJECTED);
         payroll.setDirectorRejectionReason(request.getReason().trim());
         payroll.setDirectorRequestedProjects(request.getTargetProjects() != null ? request.getTargetProjects().trim() : null);
@@ -224,6 +253,11 @@ public class PayrollController {
             @PathVariable Long payrollId,
             @RequestBody(required = false) WorkflowActionRequest request) {
         Payroll payroll = resolvePayrollForWorkflow(payrollId);
+        if (payroll.getStatus() != PayrollStatus.REVIEWED) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Giám đốc chỉ có thể phê duyệt khi Kế toán trưởng đã thẩm định xong (trạng thái REVIEWED, hiện tại: " + payroll.getStatus() + ")"
+            ));
+        }
         payroll.setStatus(PayrollStatus.APPROVED);
         if (request != null) {
             payroll.setApprovedBy(request.getOperatorUserId());
@@ -246,6 +280,11 @@ public class PayrollController {
     @PostMapping("/{payrollId}/lock-and-pay")
     public ResponseEntity<?> lockAndPay(@PathVariable Long payrollId) {
         Payroll payroll = resolvePayrollForWorkflow(payrollId);
+        if (payroll.getStatus() != PayrollStatus.APPROVED) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Chỉ có thể khóa sổ và chi trả khi bảng lương đã được Giám đốc phê duyệt (trạng thái APPROVED, hiện tại: " + payroll.getStatus() + ")"
+            ));
+        }
         payroll.setStatus(PayrollStatus.PAID);
         payroll.setUpdatedAt(LocalDateTime.now());
         Payroll saved = payrollRepository.save(payroll);
