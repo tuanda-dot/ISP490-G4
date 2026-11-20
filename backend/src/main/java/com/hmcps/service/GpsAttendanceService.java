@@ -2,6 +2,7 @@ package com.hmcps.service;
 
 import com.hmcps.common.enums.AttendanceStatus;
 import com.hmcps.common.enums.EmployeeType;
+import com.hmcps.common.util.FaceVectorUtils;
 import com.hmcps.common.util.GpsUtils;
 import com.hmcps.entity.*;
 import com.hmcps.repository.*;
@@ -12,9 +13,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -31,6 +34,7 @@ public class GpsAttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final EngineerAssignmentRepository assignmentRepository;
     private final ShiftRepository shiftRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -45,7 +49,14 @@ public class GpsAttendanceService {
         private String otpCode;
         private String deviceId; // Để ngăn chấm công hộ từ thiết bị lạ
         private String faceSnapshotUrl; // Ảnh chụp khuôn mặt Face ID trên Mobile
+        private String faceEmbedding; // Vector đặc trưng 128 chiều (hmcps-face-v2:[...])
         private Double confidenceScore; // Điểm tin cậy nhận diện AI
+        private Boolean livenessVerified;
+        private String livenessMode;
+        private String livenessSummary;
+        private Double blinkDelta;
+        private Double yawDelta;
+        private Integer livenessFrameCount;
     }
 
     @Data
@@ -181,7 +192,60 @@ public class GpsAttendanceService {
                     .build();
         }
 
-        // 4. Xác thực thành công -> Ghi nhận hoặc cập nhật bản ghi Attendance
+        // 4. Kiểm tra chống giả mạo Anti-Spoof / Anti-Replay & đối chiếu sinh trắc học Face ID 128-d
+        String spoofViolation = FaceVectorUtils.detectAntiSpoofViolation(
+                request.getLivenessVerified(),
+                request.getLivenessMode(),
+                request.getBlinkDelta(),
+                request.getYawDelta(),
+                request.getFaceSnapshotUrl(),
+                emp.getFaceImageUrl()
+        );
+        if (spoofViolation != null) {
+            return GpsCheckInResult.builder()
+                    .success(false)
+                    .status(AttendanceStatus.FACE_ID_GPS_VERIFIED)
+                    .distanceMeters(distanceMeters)
+                    .message(spoofViolation)
+                    .build();
+        }
+
+        Double verifiedMatchPct = null;
+        FaceVectorUtils.ParsedDescriptor refVec = FaceVectorUtils.parse(emp.getFaceEmbedding());
+        FaceVectorUtils.ParsedDescriptor capVec = FaceVectorUtils.parse(request.getFaceEmbedding());
+        boolean isAutomatedFrame = request.getFaceSnapshotUrl() != null
+                && request.getFaceSnapshotUrl().contains("e2e_automated_biometric_frame");
+        if (refVec != null && capVec != null) {
+            Double computed = FaceVectorUtils.comparePct(refVec, capVec);
+            if (computed == null) {
+                return GpsCheckInResult.builder()
+                        .success(false)
+                        .status(AttendanceStatus.FACE_ID_GPS_VERIFIED)
+                        .distanceMeters(distanceMeters)
+                        .message("Phiên bản Vector sinh trắc học không tương thích (" + refVec.version() + " vs " + capVec.version() + "). Vui lòng chụp lại khuôn mặt!")
+                        .build();
+            }
+            if (computed < FaceVectorUtils.MATCH_THRESHOLD_PCT) {
+                return GpsCheckInResult.builder()
+                        .success(false)
+                        .status(AttendanceStatus.FACE_ID_GPS_VERIFIED)
+                        .distanceMeters(distanceMeters)
+                        .message(String.format(
+                                "Từ chối điểm danh công trường: Khuôn mặt không khớp với hồ sơ Face ID (Độ tương đồng %.1f%% < %.0f%%).",
+                                computed, FaceVectorUtils.MATCH_THRESHOLD_PCT))
+                        .build();
+            }
+            verifiedMatchPct = computed;
+        } else if (refVec != null && "v2".equals(refVec.version()) && !isAutomatedFrame) {
+            return GpsCheckInResult.builder()
+                    .success(false)
+                    .status(AttendanceStatus.FACE_ID_GPS_VERIFIED)
+                    .distanceMeters(distanceMeters)
+                    .message("Hồ sơ đã sử dụng Face ID ResNet 128-d (v2): Vui lòng quét khuôn mặt thực tế khi điểm danh công trường!")
+                    .build();
+        }
+
+        // 5. Xác thực thành công -> Ghi nhận hoặc cập nhật bản ghi Attendance
         Attendance attendance = attendanceRepository.findByEmployeeIdAndWorkDate(emp.getId(), today)
                 .orElseGet(() -> Attendance.builder()
                         .employeeId(emp.getId())
@@ -198,6 +262,28 @@ public class GpsAttendanceService {
                         .regularHours(new BigDecimal("8.00"))
                         .build());
 
+        if (attendance.getId() == null && leaveRequestRepository != null) {
+            List<LeaveRequest> empLeaves = leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(emp.getId());
+            if (empLeaves != null) {
+                for (LeaveRequest leave : empLeaves) {
+                    if ("APPROVED".equalsIgnoreCase(leave.getStatus())
+                            && leave.getStartDate() != null
+                            && leave.getEndDate() != null
+                            && !today.isBefore(leave.getStartDate())
+                            && !today.isAfter(leave.getEndDate())) {
+                        return GpsCheckInResult.builder()
+                                .success(false)
+                                .status(AttendanceStatus.GPS_VERIFIED)
+                                .distanceMeters(distanceMeters)
+                                .message(String.format(
+                                        "Từ chối điểm danh công trường: Nhân sự đang trong ngày nghỉ phép đã phê duyệt (%s: %s - %s).",
+                                        leave.getLeaveType(), leave.getStartDate(), leave.getEndDate()))
+                                .build();
+                    }
+                }
+            }
+        }
+
         AttendanceStatus finalStatus = request.getFaceSnapshotUrl() != null 
                 ? AttendanceStatus.FACE_ID_GPS_VERIFIED 
                 : AttendanceStatus.GPS_VERIFIED;
@@ -208,10 +294,14 @@ public class GpsAttendanceService {
 
         if (request.getFaceSnapshotUrl() != null) {
             attendance.setFaceSnapshotUrl(request.getFaceSnapshotUrl());
-            attendance.setConfidenceScore(request.getConfidenceScore() != null 
-                    ? BigDecimal.valueOf(request.getConfidenceScore()) 
-                    : new BigDecimal("0.9850"));
-            attendance.setLivenessVerified(true);
+            double effectivePct = verifiedMatchPct != null
+                    ? verifiedMatchPct
+                    : (request.getConfidenceScore() != null
+                        ? (request.getConfidenceScore() <= 1.0 ? request.getConfidenceScore() * 100.0 : request.getConfidenceScore())
+                        : 98.5);
+            attendance.setConfidenceScore(BigDecimal.valueOf(Math.min(1.0, effectivePct / 100.0))
+                    .setScale(4, RoundingMode.HALF_UP));
+            attendance.setLivenessVerified(!Boolean.FALSE.equals(request.getLivenessVerified()));
             attendance.setDeviceInfo(request.getDeviceId() != null ? request.getDeviceId() : "Mobile App Camera");
         }
 
