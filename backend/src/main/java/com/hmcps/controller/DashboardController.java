@@ -38,12 +38,6 @@ public class DashboardController {
         Map<String, Object> status = new HashMap<>();
         status.put("status", "UP");
         status.put("system", "HMCPS - Hệ Thống Quản Lý Tiền Lương & Nhân Sự Xây Dựng Hải Minh (Backend REST API)");
-        status.put("frontendWebAppUrl", "http://localhost:5173");
-        status.put("swaggerDocsUrl", "http://localhost:8080/swagger-ui/index.html");
-        status.put("h2ConsoleUrl", "http://localhost:8080/h2-console");
-        status.put("h2JdbcUrl", "jdbc:h2:file:./target/hmcps_dev_db");
-        status.put("h2Username", "sa");
-        status.put("h2Password", "(để trống)");
         status.put("totalEmployees", employeeRepository.count());
         return ResponseEntity.ok(status);
     }
