@@ -40,7 +40,7 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Value("${spring.mail.username:notification.hmcps@gmail.com}")
+    @Value("${spring.mail.username:basilalaad@gmail.com}")
     private String senderEmail;
 
     @Value("${spring.mail.password:xxxx-xxxx-xxxx-xxxx}")
@@ -49,7 +49,8 @@ public class EmailService {
     private final ConcurrentLinkedDeque<Map<String, String>> dispatchedLogs = new ConcurrentLinkedDeque<>();
 
     public boolean isLiveSmtpConfigured() {
-        return mailPassword != null && !mailPassword.isBlank() && !mailPassword.startsWith("xxxx");
+        String normalized = mailPassword != null ? mailPassword.trim() : "";
+        return !normalized.isEmpty() && !normalized.startsWith("xxxx");
     }
 
     /**
@@ -82,20 +83,50 @@ public class EmailService {
     }
 
     public EmailDispatchResult sendPasswordResetOtpEmailWithResult(String toEmail, String employeeName, String otpCode) {
-        String subject = "[HMCPS] Mã OTP Khôi phục Mật khẩu";
+        return sendPasswordResetLinkEmailWithResult(toEmail, employeeName, null, otpCode);
+    }
+
+    /**
+     * Gửi email chứa link bấm trực tiếp tới trang đặt lại mật khẩu (kèm mã OTP dự phòng)
+     */
+    public EmailDispatchResult sendPasswordResetLinkEmailWithResult(
+            String toEmail,
+            String employeeName,
+            String resetLink,
+            String otpCode
+    ) {
+        boolean hasResetLink = resetLink != null && !resetLink.isBlank();
+        String subject = hasResetLink
+                ? "[HMCPS] Đường dẫn đặt lại mật khẩu tài khoản nhân sự"
+                : "[HMCPS] Mã OTP đặt lại mật khẩu tài khoản nhân sự";
         String displayName = (employeeName != null && !employeeName.isBlank()) ? employeeName : toEmail;
+        String safeLinkHtml = hasResetLink
+                ? String.format("""
+                    <div style="text-align: center; margin: 24px 0;">
+                        <a href="%s" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: bold; padding: 13px 28px; border-radius: 8px;">
+                            Đặt Lại Mật Khẩu Ngay
+                        </a>
+                    </div>
+                    <p style="font-size: 13px; color: #475569; margin: 12px 0;">
+                        Nếu nút bấm không hoạt động, Anh/Chị hãy copy và dán đường dẫn sau vào trình duyệt:<br>
+                        <a href="%s" style="color: #2563eb; word-break: break-all;">%s</a>
+                    </p>
+                    """, resetLink, resetLink, resetLink)
+                : "";
         String content = String.format("""
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
                 <h3 style="color: #2C3D50; border-bottom: 2px solid #2563eb; padding-bottom: 8px;">YÊU CẦU ĐẶT LẠI MẬT KHẨU HỆ THỐNG HMCPS</h3>
                 <p>Kính gửi Anh/Chị <strong>%s</strong>,</p>
                 <p>Hệ thống nhận được yêu cầu đặt lại mật khẩu cho tài khoản <strong>%s</strong>.</p>
-                <p>Mã xác thực OTP của Anh/Chị là:</p>
-                <div style="text-align: center; margin: 25px 0;">
-                    <span style="display: inline-block; background-color: #2C3D50; color: #ffffff; font-size: 24px; font-weight: bold; letter-spacing: 6px; padding: 12px 25px; border-radius: 6px;">%s</span>
+                %s
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 15px; margin: 18px 0;">
+                    <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Mã OTP xác thực dự phòng (nếu nhập trực tiếp trên màn hình đăng nhập):</div>
+                    <div style="font-size: 20px; font-weight: bold; letter-spacing: 5px; color: #1e293b;">%s</div>
                 </div>
-                <p style="color: #7f8c8d; font-size: 13px;">Mã OTP có hiệu lực trong vòng 05 phút. Tuyệt đối không chia sẻ mã này cho bất kỳ ai.</p>
+                <p style="color: #7f8c8d; font-size: 13px;">Đường dẫn và mã OTP có hiệu lực trong vòng 15 phút và chỉ sử dụng được một lần. Tuyệt đối không chia sẻ cho bất kỳ ai.</p>
+                <p style="margin-top: 24px;">Trân trọng,<br><strong>Hệ thống Quản trị Nhân sự &amp; Tính lương Hải Minh (HMCPS)</strong></p>
             </div>
-            """, displayName, toEmail, otpCode);
+            """, displayName, toEmail, safeLinkHtml, otpCode);
 
         return sendHtmlEmailSync(toEmail, subject, content, null, null);
     }
@@ -178,6 +209,15 @@ public class EmailService {
             </div>
             """;
         return sendHtmlEmailSync(target, subject, content, null, null);
+    }
+
+    /**
+     * Gửi email thử nghiệm sử dụng mẫu HTML tùy biến từ phân hệ Cấu hình Mẫu Phiếu lương & Thông báo (UC-25)
+     */
+    public EmailDispatchResult sendCustomTemplateEmail(String toEmail, String subject, String htmlContent) {
+        String target = (toEmail != null && !toEmail.isBlank()) ? toEmail.trim() : senderEmail;
+        String safeSubject = (subject != null && !subject.isBlank()) ? subject.trim() : "[HMCPS] Kiểm thử mẫu thông báo";
+        return sendHtmlEmailSync(target, safeSubject, htmlContent != null ? htmlContent : "", null, null);
     }
 
     private void sendHtmlEmail(String to, String subject, String htmlContent, String attachmentName, byte[] attachmentBytes) {
