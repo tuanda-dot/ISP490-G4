@@ -83,10 +83,13 @@ public class IntegrationController {
     }
 
     /**
-     * Lấy link chia sẻ mã OTP công trường qua Zalo (UC-107)
+     * Lấy link chia sẻ mã OTP công trường qua Zalo (UC-107) — Chỉ Chỉ huy trưởng phụ trách dự án
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('SITE_MANAGER')")
     @GetMapping("/zalo/share-otp-link")
     public ResponseEntity<Map<String, String>> getZaloOtpShareLink(@RequestParam Long projectId) {
+        com.hmcps.security.SecurityContextUtils.enforceSiteManagerProjectScope(
+                com.hmcps.security.SecurityContextUtils.getCurrentPrincipal(), projectId, projectRepository);
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Dự án không tồn tại: " + projectId));
 
